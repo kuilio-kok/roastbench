@@ -1527,7 +1527,7 @@ function openCtx(id, x, y) {
   const m = findL(id), def = MODULE_DEFS[id];
   const widthOpts = [[3, "¼"], [6, "½"], [9, "¾"], [12, "全"]];
   const hOpts = [[96, "矮"], [132, "中"], [200, "高"]];
-  const html = `<div class="cm-title">${def.title} · 宽 ${m.span}/12 · ${def.resizable ? "高 " + m.h + "px" : ""}</div>
+  const html = `<div class="cm-title">${def.title} · 宽 ${(Math.round(m.span * 10) / 10)}/12 · ${def.resizable ? "高 " + m.h + "px" : ""}</div>
     <div class="cm-item"><span>宽度</span><span class="cm-opt">${widthOpts.map(([v, n]) => `<b class="${m.span === v ? "on" : ""}" data-span="${v}">${n}</b>`).join("")}</span></div>
     ${def.resizable ? `<div class="cm-item"><span>高度</span><span class="cm-opt">${hOpts.map(([v, n]) => `<b class="${m.h === v ? "on" : ""}" data-h="${v}">${n}</b>`).join("")}</span></div>` : ""}
     <div class="cm-sep"></div>
@@ -1589,17 +1589,28 @@ document.addEventListener("mousedown", (e) => {
   }
 });
 
+/* 拖动中的轻量刷新：只改样式，图表重绘走 rAF 节流（丝滑不卡顿） */
+let rzRaf = 0;
+function liveResize(m) {
+  const el = $("dashboard").querySelector(`[data-mod="${m.id}"]`);
+  if (!el) return;
+  el.style.setProperty("--mspan", m.span);
+  setModHeight(el, m);
+  if (!rzRaf) rzRaf = requestAnimationFrame(() => { rzRaf = 0; redrawAll(); });
+}
+
 document.addEventListener("mousemove", (e) => {
   if (resizeMod) {
     const m = findL(resizeMod.dataset.mod);
     const dashW = $("dashboard").getBoundingClientRect().width;
     const colW = Math.max(1, dashW / 12);
-    const dSpan = Math.round((e.clientX - resizeStart.x) / colW);
-    m.span = Math.max(1, Math.min(12, resizeStart.span + dSpan));
+    // 无极：宽度不取整，随鼠标连续变化（保留两位小数仅防浮点误差累积）
+    const span = resizeStart.span + (e.clientX - resizeStart.x) / colW;
+    m.span = Math.round(Math.max(1, Math.min(12, span)) * 100) / 100;
     if (MODULE_DEFS[m.id] && MODULE_DEFS[m.id].resizable && resizeStart.h != null) {
       m.h = Math.round(Math.max(80, Math.min(400, resizeStart.h + (e.clientY - resizeStart.y))));
     }
-    applyLight(m);
+    liveResize(m);
     return;
   }
   if (!dragMod) return;
