@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>烤机台</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app">
+
+  <aside class="side">
+    <div class="wordmark">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect x="4" y="13" width="3.4" height="7" rx="1.7" fill="currentColor" opacity=".55"/>
+        <rect x="9.4" y="9.5" width="3.4" height="10.5" rx="1.7" fill="currentColor" opacity=".75"/>
+        <rect x="14.8" y="5.5" width="3.4" height="14.5" rx="1.7" fill="currentColor"/>
+      </svg>
+      <span>烤机台</span>
+      <span class="beat" id="beat"></span>
+    </div>
+
+    <section class="device">
+      <div class="dev-name" id="devName">正在识别…</div>
+      <div class="dev-sub" id="devSub">—</div>
+      <dl class="specs">
+        <div><dt data-i18n="芯片 · 核心">芯片 · 核心</dt><dd id="spChip">—</dd></div>
+        <div><dt data-i18n="图形">图形</dt><dd id="spGpu">—</dd></div>
+        <div><dt data-i18n="内存">内存</dt><dd id="spMem">—</dd></div>
+        <div><dt data-i18n="磁盘">磁盘</dt><dd id="spDisk">—</dd></div>
+        <div><dt data-i18n="散热">散热</dt><dd id="spFan">—</dd></div>
+        <div><dt data-i18n="供电">供电</dt><dd id="spPower">—</dd></div>
+      </dl>
+    </section>
+
+    <div class="sec-title stacked" data-i18n="压力模式">压力模式</div>
+    <div class="mode-list" id="modeList"></div>
+    <p class="rec-hint" id="recHint"></p>
+
+    <div class="side-bottom">
+      <div class="dur" id="durRow">
+        <span class="dur-lbl" data-i18n="时长">时长</span>
+        <div class="dur-chips" id="durChips">
+          <button data-d="0" class="on" data-i18n="手动">手动</button>
+          <button data-d="60">1分</button>
+          <button data-d="180">3分</button>
+          <button data-d="300">5分</button>
+          <button data-d="600">10分</button>
+          <input type="number" id="customDur" min="1" max="600" placeholder="自定义分钟" title="自定义分钟">
+        </div>
+      </div>
+
+      <div class="target" id="targetRow" hidden>
+        <div class="target-head">
+          <span class="dur-lbl" data-i18n="目标温度">目标温度</span>
+          <span class="target-val"><input type="number" id="tVal" min="70" max="105" value="95"><i>°C</i></span>
+        </div>
+        <input type="range" class="slider" id="tSlider" min="70" max="105" step="1" value="95">
+      </div>
+
+      <button class="btn primary full" id="btnStart">开始烤机</button>
+      <div class="run-row">
+        <span class="num" id="timer">00:00</span>
+        <span class="lbl" id="runState">就绪</span>
+      </div>
+      <div class="progress" id="progress"><span></span></div>
+      <p class="kbd-hint"><kbd>⌘R</kbd> 开始 / 停手　<kbd>⌘,</kbd> 设置</p>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="toolbar">
+      <div class="tb-title" data-i18n="实时概况">实时概况</div>
+      <div class="tb-actions">
+        <div class="tb-meta"><span class="clock" id="clock">--:--:--</span><span class="ivl" id="ivl">250 ms</span></div>
+        <button class="btn ghost icon" id="btnPin" title="窗口置顶">
+          <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 3.5l5 5-2 1.5-1.5 4.5-2-2-4 4-.5-.5 4-4-2-2L12 6.5l-1.5-2 1-1Z"/></svg>
+        </button>
+        <button class="btn ghost icon" id="btnCompact" title="紧凑模式">
+          <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="4" y="4" width="12" height="12" rx="2.5"/><path d="M4 8.5h12"/></svg>
+        </button>
+        <button class="btn ghost icon" id="btnEdit" title="编辑布局（右键卡片也可）">
+          <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h3M11 5h5M4 10h7M15 10h1M4 15h5M13 15h3"/></svg>
+        </button>
+        <button class="btn ghost" id="btnVerify">
+          <svg viewBox="0 0 20 20" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:5px"><path d="M10 2.8l6 2.2v4.5c0 3.6-2.5 6-6 7.7-3.5-1.7-6-4.1-6-7.7V5L10 2.8Z"/><path d="M7.3 10l1.9 1.9 3.5-3.8"/></svg>验机
+        </button>
+        <button class="btn ghost" id="btnExport">导出</button>
+        <button class="btn ghost icon" id="btnSettings" title="设置 ⌘,">
+          <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+            <circle cx="10" cy="10" r="2.4"/>
+            <path d="M10 2.6v2M10 15.4v2M2.6 10h2M15.4 10h2M4.8 4.8l1.4 1.4M13.8 13.8l1.4 1.4M15.2 4.8l-1.4 1.4M6.2 13.8l-1.4 1.4"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="compact-run" id="compactRun" hidden>
+      <button class="btn primary" id="btnStart2">开始烤机</button>
+    </div>
+
+    <div class="dashboard" id="dashboard">
+
+      <div class="panel hero module" data-mod="hero-cpu" data-span="3">
+        <span class="handle" title="拖动交换位置">⠿</span><span class="rz" title="拖拽调整宽高"></span>
+        <div class="h-top"><span class="h-label">CPU 温度</span></div>
+        <div class="h-value"><span id="hCpuTemp">--</span><i>°C</i></div>
+        <canvas class="spark" id="sp1" height="34"></canvas>
+      </div>
+
+      <div class="panel hero module" data-mod="hero-gpu" data-span="3">
+        <span class="handle" title="拖动交换位置">⠿</span><span class="rz" title="拖拽调整宽高"></span>
+        <div class="h-top"><span class="h-label">GPU 温度</span></div>
+        <div class="h-value"><span id="hGpuTemp">--</span><i>°C</i></div>
+        <canvas class="spark" id="sp2" height="34"></canvas>
+      </div>
+
+      <div class="panel hero module" data-mod="hero-aw" data-span="3">
+        <span class="handle" title="拖动交换位置">⠿</span><span class="rz" title="拖拽调整宽高"></span>
+        <div class="h-top"><span class="h-label">芯片功耗</span></div>
+        <div class="h-value"><span id="hAllW">--</span><i>W</i></div>
+        <canvas class="spark" id="sp3" height="34"></canvas>
+      </div>
+
+      <div class="panel hero module" data-mod="hero-fan" data-span="3">
+        <span class="handle" title="拖动交换位置">⠿</span><span class="rz" title="拖拽调整宽高"></span>
+        <div class="h-top"><span class="h-label">风扇转速</span></div>
+        <div class="h-value"><span id="hFan">--</span><i>RPM</i></div>
+        <canvas class="spark" id="sp4" height="34"></canvas>
+      </div>
+
+      <section class="panel chart module" data-mod="temp" data-span="12" data-h="m">
+        <span class="handle" title="拖动交换位置">⠿</span><span class="rz" title="拖拽调整宽高"></span>
+        <header><span class="c-title" data-i18n="温度曲线" data-chart-title="temp">温度曲线</span>
+          <div class="lg" id="lgTemp"></div>
+          <div class="chart-sel"><select id="sTempA"></select><select id="sTempB"></select><select id="sTempC"></select></div>
+        </header>
+        <canvas id="cvTemp"></canvas>
+      </section>
+
+      <section class="panel chart module" data-mod="power" data-span="12" data-h="m">
+        <span class="handle" title="拖动交换位置">⠿</span><span class="rz" title="拖拽调整宽高"></span>
+        <header><span class="c-title" data-i18n="功耗曲线" data-chart-title="power">功耗曲线</span>
+          <div class="lg" id="lgPower"></div>
+          <div class="chart-sel"><select id="sPowerA"></select><select id="sPowerB"></select><select id="sPowerC"></select></div>
+        </header>
+        <canvas id="cvPower"></canvas>
+      </section>
+
+      <section class="panel chart module" data-mod="fan" data-span="12" data-h="m">
+        <span class="handle" title="拖动交换位置">⠿</span><span class="rz" title="拖拽调整宽高"></span>
+        <header><span class="c-title" data-i18n="风扇与频率" data-chart-title="fan">风扇与频率</span>
+          <div class="lg" id="lgFan"></div>
+          <div class="chart-sel"><select id="sFanA"></select><select id="sFanB"></select><select id="sFanC"></select></div>
+        </header>
+        <canvas id="cvFan"></canvas>
+      </section>
+
+      <section class="panel module" data-mod="peaks" data-span="12">
+        <span class="handle" title="拖动交换位置">⠿</span><span class="rz" title="拖拽调整宽高"></span>
+        <header class="ph"><span class="c-title" data-i18n="本轮峰值">本轮峰值</span><span class="ph-note" id="runNote">尚未开始</span></header>
+        <div class="pk-grid">
+          <div><span>CPU 温度</span><b id="pkCpu">—</b></div>
+          <div><span>GPU 温度</span><b id="pkGpu">—</b></div>
+          <div><span>芯片功耗</span><b id="pkAll">—</b></div>
+          <div><span>整机功耗</span><b id="pkSys">—</b></div>
+          <div><span>风扇最高</span><b id="pkFan">—</b></div>
+          <div><span>P 核最低频</span><b id="pkFreq">—</b></div>
+        </div>
+      </section>
+
+      <details class="panel history module" data-mod="history" data-span="12">
+        <span class="handle" title="拖动交换位置">⠿</span><span class="rz" title="拖拽调整宽高"></span>
+        <summary class="ph"><span class="c-title" data-i18n="本机纪录">本机纪录</span><span class="ph-note" id="histCount"></span></summary>
+        <table class="hist">
+          <thead><tr><th>时间</th><th>模式</th><th>评级</th><th>CPU 峰值</th><th>功耗均值</th><th>时长</th></tr></thead>
+          <tbody id="histBody"><tr class="empty"><td colspan="6">还没有记录，烤一轮就有了</td></tr></tbody>
+        </table>
+        <div class="hist-foot"><button class="btn ghost tiny" id="btnClearHistory">清空纪录</button></div>
+      </details>
+
+    </div>
+  </main>
+</div>
+
+<!-- 成绩单 -->
+<div class="sheet-wrap" id="sheet">
+  <div class="sheet report">
+    <div class="sheet-head">
+      <div class="grade" id="rGrade">A</div>
+      <div class="grow">
+        <div class="sheet-title" id="rMode">成绩单</div>
+        <div class="sheet-sub" id="rDesc">—</div>
+      </div>
+      <div class="record-tag" id="rRecord">新纪录</div>
+    </div>
+    <div class="sheet-grid" id="rGrid"></div>
+    <div class="badges" id="rBadges"></div>
+    <div class="sheet-actions">
+      <button class="btn ghost" id="btnCopy">拷贝成绩</button>
+      <button class="btn ghost" id="btnImage">存为图片</button>
+      <button class="btn primary" id="btnAgain">收工</button>
+    </div>
+  </div>
+</div>
+
+<!-- 设置 -->
+<div class="sheet-wrap" id="sheetSet">
+  <div class="sheet settings">
+    <div class="settings-head">
+      <div class="settings-title">
+        <span class="set-ico">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.01a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.01a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1Z"/></svg>
+        </span>
+        <div class="grow">
+          <div class="c-title big" data-i18n="设置">设置</div>
+          <div class="set-sub">个性化你的烤机体验</div>
+        </div>
+      </div>
+      <button class="close-btn" id="btnCloseSet" title="关闭">
+        <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M5.5 5.5l9 9M14.5 5.5l-9 9"/></svg>
+      </button>
+    </div>
+
+    <div class="set-group">
+      <div class="sec-title" data-i18n="外观">外观</div>
+      <div class="row">
+        <div class="row-label">主题<span class="row-sub">浅色 / 深色 / 跟随系统</span></div>
+        <div class="seg" data-key="theme">
+          <button data-v="auto">跟随系统</button><button data-v="light">浅色</button><button data-v="dark">深色</button>
+        </div>
+      </div>
+      <div class="row col">
+        <div class="row-label">强调色<span class="row-sub">按钮与选中态的颜色</span></div>
+        <div class="swatches" id="accentSwatches"></div>
+        <input type="range" class="slider hue" id="hueSlider" min="0" max="360" value="210">
+        <div class="hue-row"><input type="color" id="accentCustom" class="colorpick"><span class="hue-val" id="hueVal">#0A84FF</span></div>
+      </div>
+      <div class="row col">
+        <div class="row-label">图表配色<span class="row-sub">整套色系，或点色块逐条调</span></div>
+        <div class="swatches big" id="chartSwatches"></div>
+        <div class="series-colors" id="seriesColors"></div>
+        <button class="btn ghost tiny" id="btnResetChart">恢复默认颜色</button>
+      </div>
+      <div class="picker" id="picker" hidden>
+        <div class="picker-top">
+          <canvas id="svPad" width="190" height="140"></canvas>
+          <canvas id="hueBar" width="22" height="140"></canvas>
+        </div>
+        <div class="picker-bottom">
+          <div class="picker-swatch" id="pickerSwatch"></div>
+          <div class="picker-meta">
+            <span class="hue-val" id="pickerHex">#0A84FF</span>
+            <div class="picker-target" id="pickerTarget">强调色</div>
+          </div>
+        </div>
+      </div>
+      <div class="row col">
+        <div class="row-label">壁纸<span class="row-sub">背景氛围，或用自己的图片</span></div>
+        <div class="swatches wall" id="wallSwatches"></div>
+        <button class="btn ghost tiny" id="btnPickWallpaper">选择自己的图片…</button>
+      </div>
+      <div class="row">
+        <div class="row-label">玻璃透明度<span class="row-sub" id="glassVal">72%</span></div>
+        <input type="range" class="slider" id="glassSlider" min="20" max="100" step="2">
+      </div>
+      <div class="row">
+        <div class="row-label">字体大小<span class="row-sub" id="fontVal">13 px</span></div>
+        <input type="range" class="slider" id="fontSlider" min="11" max="18" step="1">
+      </div>
+      <div class="row">
+        <div class="row-label">界面密度<span class="row-sub">字号与间距</span></div>
+        <div class="seg" data-key="density">
+          <button data-v="compact">紧凑</button><button data-v="standard">标准</button><button data-v="relaxed">宽松</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="row-label">侧栏宽度<span class="row-sub">左侧面板宽窄</span></div>
+        <div class="seg" data-key="sideWidth">
+          <button data-v="240">窄</button><button data-v="278">标准</button><button data-v="320">宽</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="row-label">圆角大小<span class="row-sub">卡片与控件圆角</span></div>
+        <div class="seg" data-key="radius">
+          <button data-v="8">小</button><button data-v="14">中</button><button data-v="20">大</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="row-label">曲线线宽<span class="row-sub">图表的线条粗细</span></div>
+        <div class="seg" data-key="chartLine">
+          <button data-v="1.2">细</button><button data-v="1.6">中</button><button data-v="2.2">粗</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="row-label">曲线面积填充<span class="row-sub">线条下方的渐变阴影</span></div>
+        <input type="checkbox" class="sw" id="setFill">
+      </div>
+    </div>
+
+    <div class="set-group">
+      <div class="sec-title" data-i18n="安全">安全</div>
+      <div class="row">
+        <div class="row-label">温度保险丝<span class="row-sub">到温度自动收手</span></div>
+        <input type="checkbox" class="sw" id="setFuse">
+      </div>
+      <div class="row">
+        <div class="row-label">熔断阈值<span class="row-sub" id="fuseVal">108 °C</span></div>
+        <input type="range" class="slider" id="setFuseTemp" min="90" max="115" step="1">
+      </div>
+      <div class="row">
+        <div class="row-label">烤机时防止睡眠<span class="row-sub">压测期间自动生效，无需手动开</span></div>
+        <span class="row-val">始终开启</span>
+      </div>
+    </div>
+
+    <div class="set-group">
+      <div class="sec-title" data-i18n="采样">采样</div>
+      <div class="row">
+        <div class="row-label">采样间隔<span class="row-sub">越小越丝滑</span></div>
+        <div class="seg" data-key="interval">
+          <button data-v="250">250 ms</button><button data-v="500">500 ms</button><button data-v="1000">1 s</button>
+        </div>
+        <input type="number" id="customIvl" min="100" max="5000" step="50" placeholder="自定义 ms" class="num-in">
+      </div>
+      <div class="row">
+        <div class="row-label">图表窗口<span class="row-sub">横轴显示多长</span></div>
+        <div class="seg" data-key="windowSec">
+          <button data-v="30">30 s</button><button data-v="60">1 min</button><button data-v="180">3 min</button><button data-v="600">10 min</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="row-label">显示峰值参考线</div>
+        <input type="checkbox" class="sw" id="setPeak">
+      </div>
+    </div>
+
+    <div class="set-group">
+      <div class="sec-title" data-i18n="压测">压测</div>
+      <div class="row">
+        <div class="row-label">CPU 线程数<span class="row-sub" id="thrVal">自动（按模式）</span></div>
+        <input type="range" class="slider" id="setThreads" min="0" max="16" step="1">
+      </div>
+    </div>
+
+    <div class="set-group">
+      <div class="sec-title" data-i18n="通用">通用</div>
+      <div class="row">
+        <div class="row-label">语言<span class="row-sub">Language</span></div>
+        <div class="seg" data-key="lang">
+          <button data-v="auto">跟随系统</button><button data-v="zh">中文</button><button data-v="en">English</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="row-label">登录时启动</div>
+        <input type="checkbox" class="sw" id="setLogin">
+      </div>
+      <div class="row">
+        <div class="row-label">本轮采样导出<span class="row-sub">存成 CSV 自己画图</span></div>
+        <button class="btn ghost tiny" id="btnExport2">导出</button>
+      </div>
+      <div class="row">
+        <div class="row-label">恢复默认设置</div>
+        <button class="btn ghost tiny" id="btnReset">恢复</button>
+      </div>
+    </div>
+
+    <div class="set-group">
+      <div class="sec-title" data-i18n="关于">关于</div>
+      <div class="row"><div class="row-label">版本</div><span class="row-val">2.4.0</span></div>
+      <div class="row">
+        <div class="row-label">硬件详情<span class="row-sub">完整系统信息</span></div>
+        <button class="btn ghost tiny" id="btnHardware">查看</button>
+      </div>
+      <div class="row">
+        <div class="row-label">传感器面板<span class="row-sub">全部实时指标一览</span></div>
+        <button class="btn ghost tiny" id="btnSensor">查看</button>
+      </div>
+      <div class="row">
+        <div class="row-label">仪表盘布局<span class="row-sub">模块大小与位置</span></div>
+        <button class="btn ghost tiny" id="btnResetLayout">重置布局</button>
+      </div>
+      <div class="row"><div class="row-label">处理器</div><span class="row-val" id="aboutChip">—</span></div>
+      <div class="row"><div class="row-label">数据源</div><span class="row-val" id="aboutSrc">—</span></div>
+    </div>
+
+    <div class="set-done">
+      <button class="btn primary full" id="btnDoneSet" data-i18n="完成">完成</button>
+    </div>
+  </div>
+</div>
+
+<!-- 硬件详情 -->
+<div class="sheet-wrap" id="sheetHw">
+  <div class="sheet settings">
+    <div class="settings-head">
+      <span class="c-title big" data-i18n="硬件详情">硬件详情</span>
+      <button class="close-btn" id="btnCloseHw" title="关闭">
+        <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M5.5 5.5l9 9M14.5 5.5l-9 9"/></svg>
+      </button>
+    </div>
+    <div class="set-group"><div class="hw-grid" id="hwGrid"></div></div>
+  </div>
+</div>
+
+<!-- 传感器面板 -->
+<div class="sheet-wrap" id="sheetSensor">
+  <div class="sheet settings">
+    <div class="settings-head">
+      <span class="c-title big" data-i18n="传感器面板">传感器面板</span>
+      <button class="close-btn" id="btnCloseSensor" title="关闭">
+        <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M5.5 5.5l9 9M14.5 5.5l-9 9"/></svg>
+      </button>
+    </div>
+    <div class="set-group"><div class="sensor-grid" id="sensorGrid"></div></div>
+  </div>
+</div>
+
+<!-- 图表全屏 -->
+<div class="zoom-wrap" id="zoomWrap">
+  <div class="zoom-panel">
+    <div class="zoom-head">
+      <span class="c-title big" id="zoomTitle">温度曲线</span>
+      <div class="lg" id="zoomLegend"></div>
+      <button class="close-btn" id="btnCloseZoom" title="关闭 Esc">
+        <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M5.5 5.5l9 9M14.5 5.5l-9 9"/></svg>
+      </button>
+    </div>
+    <div class="zoom-body"><canvas id="zoomCanvas"></canvas></div>
+    <div class="zoom-hint">双指捏合缩放 · 拖动平移 · Esc 关闭</div>
+  </div>
+</div>
+
+<!-- 验机报告 -->
+<div class="sheet-wrap" id="sheetVerify">
+  <div class="sheet settings verify">
+    <div class="settings-head">
+      <div class="settings-title">
+        <span class="set-ico">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 2.5v5.2c0 4.3-2.9 7.1-7 9.3-4.1-2.2-7-5-7-9.3V5.5L12 3Z"/><path d="M8.6 12l2.3 2.3 4.5-4.8"/></svg>
+        </span>
+        <div class="grow">
+          <div class="c-title big">验机报告</div>
+          <div class="set-sub">电池 · 磁盘 · 配置 全面体检</div>
+        </div>
+      </div>
+      <button class="close-btn" id="btnCloseVerify" title="关闭">
+        <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M5.5 5.5l9 9M14.5 5.5l-9 9"/></svg>
+      </button>
+    </div>
+    <div class="verify-body" id="verifyBody">
+      <div class="verify-loading">正在采集电池与磁盘数据…</div>
+    </div>
+  </div>
+</div>
+
+<div class="ctx-menu" id="ctxMenu" hidden></div>
+<div class="toasts" id="toasts"></div>
+<div class="banner" id="banner"></div>
+
+<script>
+window.onerror = function(m,s,l,c){ try{ window.webkit.messageHandlers.api.postMessage({op:'jserror', msg:m+' @'+l+':'+c}); }catch(_){} };
+</script>
+<script src="app.js"></script>
+</body>
+</html>
