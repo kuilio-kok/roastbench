@@ -1290,6 +1290,14 @@ final class MainController: NSViewController, WKScriptMessageHandler {
             self.saveCSV(rows)
             notice(id, "{\"ok\":true}")
 
+        case "title":
+            // 页面切分区时同步窗口标题（隐藏标题栏也影响 Mission Control / 窗口菜单）
+            let t = body["text"] as? String ?? "烤机台"
+            for w in NSApp.windows where w.contentViewController is MainController {
+                w.title = "烤机台 · " + t
+            }
+            notice(id, "{\"ok\":true}")
+
         case "drag":
             if let w = webView.window, let e = NSApp.currentEvent { w.performDrag(with: e) }
 

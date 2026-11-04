@@ -113,6 +113,218 @@ window.__reply = (id, payload) => {
   if (r) { _pending.delete(id); r(payload); }
 };
 
+/* =========================================================================
+   Mac 工具箱 · 模块注册表 + 分区导航框架
+   新增功能 = 在 TOOLBOX_MODULES 追加一条定义 + 提供一个 <template id="tpl-xxx">。
+   导航、总览页、页面挂载、状态徽标全部由注册表驱动，无需改动框架代码。
+   ========================================================================= */
+const TOOLBOX_MODULES = [
+  {
+    id: "overview", name: "总览", icon: "▦", group: "", order: 0,
+    desc: "工具箱全貌：各模块用途与当前状态，可一键进入任意模块。",
+    badge: null,
+  },
+  {
+    id: "burn", name: "性能压测", icon: "♨", group: "工具", order: 10,
+    desc: "十种压力模式加载 CPU / GPU，记录温度、功耗与风扇曲线，结束后出成绩单。",
+    badge: () => { try { return running ? { text: "运行中", tone: "live" } : { text: "就绪", tone: "idle" }; } catch (e) { return { text: "就绪", tone: "idle" }; } },
+  },
+  {
+    id: "monitor", name: "实时监控", icon: "◎", group: "工具", order: 20,
+    desc: "按采样间隔滚动绘制温度、功耗、风扇与频率曲线，并提供全部传感器读数。",
+    badge: () => (window._last ? { text: "在线", tone: "ok" } : { text: "等待数据", tone: "idle" }),
+  },
+  {
+    id: "verify", name: "整机验机", icon: "✓", group: "检测", order: 30,
+    desc: "只读采集 60 余项整机信息（机型 / 芯片 / 内存 / 硬盘 / 电池 / 屏幕 / 安全），可导出文本或 JSON。",
+    badge: () => {
+      let rep = null;
+      try { rep = reportData; } catch (e) { rep = null; }
+      if (!rep) return { text: "未采集", tone: "idle" };
+      const v = (rep.summary || {}).verdict;
+      if (v === "bad") return { text: "发现异常", tone: "bad" };
+      if (v === "warn") return { text: "需留意", tone: "warn" };
+      return { text: "已通过", tone: "ok" };
+    },
+  },
+  {
+    id: "diag", name: "Apple 诊断", icon: "⚙", group: "检测", order: 40,
+    desc: "按机型给出苹果内置硬件诊断的分步引导，确认后可由 App 关机进入诊断。",
+    badge: () => ({ text: "需重启", tone: "warn" }),
+  },
+  {
+    id: "settings", name: "偏好设置", icon: "⌥", group: "系统", order: 50,
+    desc: "主题、强调色、图表配色、壁纸、采样间隔、线程分配与登录项。",
+    badge: null,
+  },
+  {
+    id: "about", name: "关于本机", icon: "ⓘ", group: "系统", order: 60,
+    desc: "机型与系统概要、部件与服务历史入口、版本信息与监控卡片布局重置。",
+    badge: null,
+  },
+];
+
+/* 模块进入时的钩子（可选）：只放"进入即需要刷新"的动作 */
+const MODULE_HOOKS = {
+  burn: () => { applyLayout(); redrawAll(); },
+  monitor: () => { renderSensors(window._last); redrawAll(); },
+  verify: () => { if (!reportData) loadInspect(); },
+  about: () => loadHardware(),
+};
+
+let currentModule = "overview";
+
+const moduleById = (id) => TOOLBOX_MODULES.find((m) => m.id === id) || null;
+const sortedModules = () => TOOLBOX_MODULES.slice().sort((a, b) => a.order - b.order);
+const navModules = () => sortedModules().filter((m) => m.inNav !== false);
+
+function moduleBadge(m) {
+  const b = typeof m.badge === "function" ? m.badge() : m.badge;
+  return b ? `<span class="mbadge ${b.tone || "idle"}">${esc(b.text)}</span>` : "";
+}
+
+/* ---------- 导航 ---------- */
+function renderNav() {
+  const nav = $("nav");
+  const groups = [];
+  navModules().forEach((m) => {
+    let g = groups.find((x) => x.name === m.group);
+    if (!g) { g = { name: m.group, items: [] }; groups.push(g); }
+    g.items.push(m);
+  });
+  nav.innerHTML = groups.map((g) => `
+    <div class="nav-group">
+      ${g.name ? `<div class="nav-label">${esc(g.name)}</div>` : ""}
+      ${g.items.map((m) => `
+        <button class="nav-item" type="button" data-nav="${m.id}">
+          <span class="ni-ico">${m.icon}</span>
+          <span class="ni-name">${esc(m.name)}</span>
+          <span class="ni-badge" data-badge="${m.id}"></span>
+        </button>`).join("")}
+    </div>`).join("");
+  nav.querySelectorAll("[data-nav]").forEach((b) => { b.onclick = () => navigate(b.dataset.nav); });
+  $("runMini").onclick = () => navigate("burn");
+}
+
+/* ---------- 总览页 ---------- */
+function overviewCardsHTML() {
+  return navModules().map((m) => `
+    <article class="ov-card" data-go="${m.id}" tabindex="0" role="button">
+      <div class="ov-top">
+        <span class="ov-ico">${m.icon}</span>
+        ${moduleBadge(m)}
+      </div>
+      <div class="ov-name">${esc(m.name)}</div>
+      <div class="ov-desc">${esc(m.desc)}</div>
+      <div class="ov-go">进入<span class="ov-arrow">›</span></div>
+    </article>`).join("");
+}
+
+function bindOverview(scope) {
+  scope.querySelectorAll("[data-go]").forEach((el) => {
+    const go = () => navigate(el.dataset.go);
+    el.onclick = go;
+    el.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } };
+  });
+}
+
+function fillOverviewDevice() {
+  const el = $("ovDevice");
+  if (!el || !window._info) return;
+  const i = window._info;
+  el.textContent = [i.display_name || i.model_name, i.chip, "macOS " + i.macos]
+    .filter(Boolean).join("  ·  ");
+}
+
+function renderOverview() {
+  const grid = $("ovGrid");
+  if (!grid) return;
+  grid.innerHTML = overviewCardsHTML();
+  bindOverview(grid);
+  fillOverviewDevice();
+}
+
+/* ---------- 页面挂载：每个模块独占一个 .page ---------- */
+function ensurePages() {
+  const pages = $("pages");
+  sortedModules().forEach((m) => {
+    if (pages.querySelector("#page-" + m.id)) return;
+    const sec = document.createElement("section");
+    sec.className = "page";
+    sec.id = "page-" + m.id;
+    if (m.id === "overview") {
+      sec.innerHTML = `
+        <header class="ov-hero">
+          <div class="ov-hero-t">${esc(m.name)}</div>
+          <div class="ov-hero-d">${esc(m.desc)}</div>
+          <div class="ov-device" id="ovDevice">正在识别本机…</div>
+        </header>
+        <div class="ov-grid" id="ovGrid"></div>`;
+    } else {
+      const tpl = document.getElementById("tpl-" + m.id);
+      if (tpl) sec.appendChild(tpl.content.cloneNode(true));
+      else sec.innerHTML = `<div class="empty"><b>模块视图缺失</b><span>未找到 template#tpl-${esc(m.id)}</span></div>`;
+    }
+    pages.appendChild(sec);
+  });
+}
+
+/* ---------- 分区切换：唯一入口 ---------- */
+function navigate(id) {
+  const m = moduleById(id);
+  if (!m) return;
+  currentModule = id;
+  document.querySelectorAll("#pages .page").forEach((p) => p.classList.toggle("on", p.id === "page-" + id));
+  document.querySelectorAll("[data-nav]").forEach((b) => b.classList.toggle("on", b.dataset.nav === id));
+  const crumb = $("crumb");
+  const crumbText = m.group ? `${m.group} / ${m.name}` : m.name;
+  if (crumb) crumb.textContent = crumbText;
+  document.title = `${crumbText} · 烤机台`;
+  call("title", { text: crumbText });
+  document.body.dataset.page = id;
+  const pages = $("pages");
+  if (pages) pages.scrollTop = 0;
+  const cr = $("compactRun");
+  if (cr) cr.hidden = !document.body.classList.contains("compact");
+  if (id === "overview") renderOverview();
+  const hook = MODULE_HOOKS[id];
+  if (hook) { try { hook(); } catch (err) { toast("模块加载失败：" + (err && err.message ? err.message : err), true); } }
+  refreshBadges();
+  setTimeout(redrawAll, 40);
+}
+
+/* 状态徽标随数据变化刷新（导航 + 总览）；节流，避免每次采样都改 DOM */
+let lastBadgeAt = 0;
+function refreshBadges(force) {
+  const now = Date.now();
+  if (!force && now - lastBadgeAt < 900) return;
+  lastBadgeAt = now;
+  sortedModules().forEach((m) => {
+    const slot = document.querySelector(`.ni-badge[data-badge="${m.id}"]`);
+    if (slot) slot.innerHTML = moduleBadge(m);
+    const card = document.querySelector(`#ovGrid [data-go="${m.id}"]`);
+    if (card) {
+      const top = card.querySelector(".ov-top");
+      if (top) top.innerHTML = `<span class="ov-ico">${m.icon}</span>${moduleBadge(m)}`;
+    }
+  });
+}
+
+function initToolbox() {
+  ensurePages();
+  renderNav();
+  const brand = document.querySelector(".wordmark");
+  if (brand) {
+    brand.style.cursor = "default";
+    brand.onclick = () => navigate("overview");
+    brand.title = "回到总览";
+  }
+  navigate("overview");
+}
+
+/* 页面结构在脚本一开始就挂载好，后续所有顶层 DOM 绑定才拿得到元素 */
+initToolbox();
+
 /* ---------- 指标字典 / 图表定义 ---------- */
 const METRICS = {
   ct: { n: "CPU温度", u: "°C", c: "c-cpu",  f: (v) => v.toFixed(0) + "°C" },
@@ -592,6 +804,9 @@ function renderInfo(i) {
   $("recHint").textContent = hintFor(i);
   $("setThreads").max = String(i.ncpu || 16);
   renderModes();
+  window._info = i;
+  fillOverviewDevice();
+  refreshBadges(true);
 }
 
 function setPowerUI(src, pct) {
@@ -604,7 +819,9 @@ function setPowerUI(src, pct) {
 const setText = (id, v) => { const el = $(id); if (el.textContent !== String(v)) el.textContent = v; };
 
 function updateText(d) {
+  const wasRunning = window.__wasRunning;
   window._last = d;
+  if (wasRunning !== running) { window.__wasRunning = running; refreshBadges(true); }
   setText("hCpuTemp", d.ct.toFixed(0));
   setText("hGpuTemp", d.gt.toFixed(0));
   setText("hAllW", d.aw.toFixed(1));
@@ -666,7 +883,7 @@ window.__tick = (d) => {
   lastTickAt = performance.now();
   if (d.p) setPowerUI(d.p, d.b);
   updateText(d);
-  if ($("sheetSensor").classList.contains("show")) renderSensors(d);
+  if (currentModule === "monitor") renderSensors(d);
   ensureLoop();
 };
 window.__power = (src, pct) => {
@@ -965,8 +1182,6 @@ $("customIvl").onchange = (e) => {
   const v = Math.max(100, Math.min(5000, Number(e.target.value) || 250));
   call("set", { key: "interval", value: v }).then((r) => r.settings && applySettings(r.settings));
 };
-$("btnSensor").onclick = () => { openSheet($("sheetSensor")); renderSensors(window._last); };
-$("btnCloseSensor").onclick = () => closeSheet($("sheetSensor"));
 function renderSensors(d) {
   if (!d) { $("sensorGrid").innerHTML = '<div><span>等待数据…</span></div>'; return; }
   const grid = $("sensorGrid");
@@ -1008,7 +1223,6 @@ document.addEventListener("mouseup", () => { if (pickerDrag) { pickerDrag = fals
 
 function tickClock() { setText("clock", new Date().toTimeString().slice(0, 8)); }
 
-$("btnExport").onclick = exportCSV;
 $("btnExport2").onclick = exportCSV;
 function exportCSV() {
   if (!runS.length) { toast("先烤一轮才有数据可以导出", true); return; }
@@ -1049,17 +1263,9 @@ function closeSheet(el) {
 document.querySelectorAll(".sheet-wrap").forEach((w) => {
   w.addEventListener("mousedown", (e) => { if (e.target === w) closeSheet(w); });
 });
-// 设置面板滚动时标题栏淡出
-document.querySelectorAll(".sheet.settings").forEach((el) => {
-  el.addEventListener("scroll", (e) => {
-    const head = el.querySelector(".settings-head");
-    if (head) head.classList.toggle("scrolled", el.scrollTop > 28);
-  });
-});
+// 设置已从弹层迁移为独立分区，滚动淡出逻辑随之废弃
 
-$("btnSettings").onclick = () => openSheet($("sheetSet"));
-$("btnCloseSet").onclick = () => closeSheet($("sheetSet"));
-$("btnDoneSet").onclick = () => closeSheet($("sheetSet"));
+$("btnSettings").onclick = () => navigate("settings");
 $("btnPickWallpaper").onclick = () => call("pickWallpaper");
 window.__wallpaperPicked = () => {
   call("set", { key: "wallpaper", value: "custom" }).then((r) => r.settings && applySettings(r.settings));
@@ -1074,18 +1280,9 @@ function esc(t) {
   return String(t == null ? "" : t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 }
 
-function switchPane(name) {
-  document.querySelectorAll(".vtab").forEach((b) => b.classList.toggle("on", b.dataset.pane === name));
-  $("paneInfo").hidden = name !== "info";
-  $("paneDiag").hidden = name !== "diag";
-}
+// 验机与 Apple 诊断现在是两个独立分区；保留 switchPane 作为兼容入口
+function switchPane(name) { navigate(name === "diag" ? "diag" : "verify"); }
 
-$("btnVerify").onclick = () => {
-  openSheet($("sheetVerify"));
-  switchPane("info");
-  loadInspect();
-};
-$("btnCloseVerify").onclick = () => closeSheet($("sheetVerify"));
 document.querySelectorAll(".vtab").forEach((b) => {
   b.onclick = () => switchPane(b.dataset.pane);
 });
@@ -1190,7 +1387,7 @@ function renderReport() {
 }
 
 /* ---------- Apple 内置诊断 ---------- */
-$("btnDiagCancel").onclick = () => switchPane("info");
+$("btnDiagCancel").onclick = () => navigate("verify");
 $("btnDiagStart").onclick = () => {
   $("diagActions").hidden = true;
   $("diagConfirm").hidden = false;
@@ -1323,8 +1520,8 @@ $("setLogin").onchange = (e) => {
     if (!r.ok) { toast("登录项设置失败（未签名应用可能被系统拦）", true); e.target.checked = !e.target.checked; }
   });
 };
-$("btnHardware").onclick = () => {
-  openSheet($("sheetHw"));
+// 硬件详情已并入「关于本机」分区
+function loadHardware() {
   call("hardware").then((r) => {
     if (!r.hw) return;
     const h = r.hw;
@@ -1335,17 +1532,23 @@ $("btnHardware").onclick = () => {
       ["磁盘可用", h.disk_free], ["已开机", h.uptime], ["电池循环", h.cycles],
       ["供电", h.power === "battery" ? "电池" : "外接电源"],
     ];
-    $("hwGrid").innerHTML = rows.map(([k, v]) => `<div><span>${k}</span><b>${v || "—"}</b></div>`).join("");
+    const grid = $("hwGrid");
+    if (grid) grid.innerHTML = rows.map(([k, v]) => `<div><span>${k}</span><b>${v || "—"}</b></div>`).join("");
   });
-};
-$("btnCloseHw").onclick = () => closeSheet($("sheetHw"));
+}
+const openParts = () => call("openPartsHistory").then((r) => {
+  toast(r && r.ok ? "已打开「系统信息」，请点左侧「硬件」" : "打开失败，请手动打开「系统信息」", !(r && r.ok));
+});
+$("btnParts2").onclick = openParts;
 $("btnReset").onclick = () => call("restoreDefaults").then((r) => {
   if (r.settings) { applySettings(r.settings); toast("已恢复默认设置"); }
 });
 
-/* ---------- 窗口拖动：空白处按下即拖，交给原生 ---------- */
+/* ---------- 窗口拖动：仅顶栏与侧栏头部空白处可拖，避免与内容滚动冲突 ---------- */
 document.addEventListener("mousedown", (e) => {
   if (editMode) return;  // 编辑模式下专注编辑，不触发窗口拖动
+  const zone = e.target.closest(".topbar, .side-head");
+  if (!zone) return;
   const skip = e.target.closest("button, input, select, a, .mode, canvas, .seg, .stepper, .sw, .slider, .handle, .rz");
   if (skip) return;
   call("drag");
@@ -1357,8 +1560,7 @@ document.addEventListener("keydown", (e) => {
   if (meta && (e.key === "r" || e.key === "R")) { e.preventDefault(); toggleRun(); }
   else if (meta && e.key === ",") {
     e.preventDefault();
-    const s = $("sheetSet");
-    s.classList.contains("show") ? closeSheet(s) : openSheet(s);
+    navigate("settings");
   }
   else if (meta && (e.key === "e" || e.key === "E")) { e.preventDefault(); exportCSV(); }
   else if (meta && (e.key === "d" || e.key === "D")) {
@@ -1367,17 +1569,12 @@ document.addEventListener("keydown", (e) => {
     call("set", { key: "theme", value: next }).then((r) => r.settings && applySettings(r.settings));
   } else if (e.key === "Escape") {
     closeSheet($("sheet"));
-    closeSheet($("sheetSet"));
-    closeSheet($("sheetHw"));
-    closeSheet($("sheetSensor"));
-    closeSheet($("sheetVerify"));
     closeZoom();
   }
 });
 
 window.addEventListener("resize", redrawAll);
 
-/* ---------- 启动 ---------- */
 function recommend(i) {
   if (i.fanless) return "passive";
   if (!i.apple_silicon) return "cpu";
@@ -1535,7 +1732,12 @@ function setEdit(on) {
   $("btnEdit").classList.toggle("on", on);
   toast(on ? "编辑模式：拖 ⠿ 交换位置，拖右下角 ⠓ 调宽高" : "已退出编辑");
 }
-$("btnEdit").onclick = () => setEdit(!editMode);
+const _btnEdit = $("btnEdit");
+if (_btnEdit) _btnEdit.onclick = () => setEdit(!editMode);
+const _btnClearHistory = $("btnClearHistory");
+if (_btnClearHistory) _btnClearHistory.onclick = () => {
+  call("clearHistory").then(() => { historyCache = []; loadHistory(); toast("历史记录已清空"); });
+};
 $("btnResetLayout").onclick = () => { layout = DEFAULT_LAYOUT.map((x) => Object.assign({}, x)); applyLayout(); saveLayout(); toast("布局已重置"); };
 
 document.addEventListener("mousedown", (e) => {
