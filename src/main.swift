@@ -1376,6 +1376,35 @@ final class MainController: NSViewController, WKScriptMessageHandler {
                 }
             }
 
+        case "inspect":
+            DispatchQueue.global(qos: .utility).async {
+                let report = Inspector.collect()
+                DispatchQueue.main.async {
+                    self.notice(id, "{\"ok\":true,\"report\":\(report)}")
+                }
+            }
+
+        case "exportInspect":
+            let fmt = body["format"] as? String ?? "txt"
+            let path = Inspector.export(format: fmt)
+            notice(id, "{\"ok\":\(path.isEmpty ? "false" : "true"),\"path\":\"\(jsonEscape(path))\"}")
+
+        case "openPartsHistory":
+            // 部件与服务历史没有命令行数据源，只能把「系统信息」拉起来让用户看
+            let r = shell("/usr/bin/open", ["-a", "System Information"])
+            let ok = r.lowercased().contains("error") ? false : true
+            notice(id, "{\"ok\":\(ok)}")
+
+        case "shutdownDiag":
+            if (body["confirm"] as? Bool) == true {
+                notice(id, "{\"ok\":true}")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+                    _ = shell("/usr/bin/osascript", ["-e", "tell application \"System Events\" to shut down"])
+                }
+            } else {
+                notice(id, "{\"ok\":false,\"reason\":\"need_confirm\"}")
+            }
+
         case "exportImage":
             if let b64 = body["data"] as? String, let data = Data(base64Encoded: b64) {
                 self.savePNG(data)
@@ -1414,7 +1443,7 @@ final class MainController: NSViewController, WKScriptMessageHandler {
         DispatchQueue.main.async {
             let panel = NSSavePanel()
             panel.nameFieldStringValue = "烤机台成绩单.png"
-            panel.allowedFileTypes = ["png"]
+            panel.allowedContentTypes = [.png]
             guard panel.runModal() == .OK, let url = panel.url else { return }
             try? data.write(to: url)
         }
@@ -1487,7 +1516,7 @@ final class MainController: NSViewController, WKScriptMessageHandler {
         DispatchQueue.main.async {
             let panel = NSSavePanel()
             panel.nameFieldStringValue = "烤机台数据.csv"
-            panel.allowedFileTypes = ["csv"]
+            panel.allowedContentTypes = [.commaSeparatedText]
             panel.canCreateDirectories = true
             guard panel.runModal() == .OK, let url = panel.url else { return }
             try? csv.write(to: url, atomically: true, encoding: .utf8)
@@ -1502,6 +1531,10 @@ final class MainController: NSViewController, WKScriptMessageHandler {
 // MARK: - App
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    /// 主窗口必须由 delegate 持有：窗口被 KVO 观察（透明标题栏 / 自动保存 frame），
+    /// 仅靠局部变量 + releasedWhenClosed 会在关闭时被多释放一次，导致退出瞬间 SIGSEGV。
+    private var mainWindow: NSWindow?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         Settings.shared.applyTheme()
@@ -1520,6 +1553,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         win.isOpaque = false
         win.minSize = NSSize(width: 980, height: 660)
         win.setFrameAutosaveName("RoastBenchMain")
+        win.isReleasedWhenClosed = false
+        mainWindow = win
         win.center()
         win.contentViewController = MainController()
         win.makeKeyAndOrderFront(nil)
@@ -1544,6 +1579,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         Burner.shared.stop()
         Metrics.shared.stop()
+        mainWindow = nil
+        StatusBarController.shared.uninstall()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }

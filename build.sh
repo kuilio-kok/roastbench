@@ -11,11 +11,11 @@ mkdir -p build "$BUNDLE/Contents/MacOS" "$BUNDLE/Contents/Resources/ui"
 
 echo "▶ 编译 arm64"
 swiftc -O -target arm64-apple-macos14.0 \
-  -o build/app_arm64 src/main.swift src/Icon.swift src/StatusBar.swift
+  -o build/app_arm64 src/main.swift src/Icon.swift src/StatusBar.swift src/Inspect.swift
 
 echo "▶ 编译 x86_64"
 swiftc -O -target x86_64-apple-macos14.0 \
-  -o build/app_x86_64 src/main.swift src/Icon.swift src/StatusBar.swift
+  -o build/app_x86_64 src/main.swift src/Icon.swift src/StatusBar.swift src/Inspect.swift
 
 echo "▶ 合并通用二进制"
 lipo -create -output "$BUNDLE/Contents/MacOS/$NAME" build/app_arm64 build/app_x86_64
@@ -52,8 +52,8 @@ cat > "$BUNDLE/Contents/Info.plist" <<PLIST
     <key>CFBundleExecutable</key>         <string>$NAME</string>
     <key>CFBundleIconFile</key>           <string>AppIcon</string>
     <key>CFBundlePackageType</key>        <string>APPL</string>
-    <key>CFBundleShortVersionString</key> <string>2.8</string>
-    <key>CFBundleVersion</key>            <string>1</string>
+    <key>CFBundleShortVersionString</key> <string>2.9</string>
+    <key>CFBundleVersion</key>            <string>29</string>
     <key>CFBundleInfoDictionaryVersion</key> <string>6.0</string>
     <key>LSMinimumSystemVersion</key>     <string>14.0</string>
     <key>NSHighResolutionCapable</key>    <true/>

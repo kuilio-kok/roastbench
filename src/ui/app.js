@@ -1066,185 +1066,151 @@ window.__wallpaperPicked = () => {
   toast("壁纸已更新");
 };
 
-/* ---------- 验机 ---------- */
+/* ---------- 验机 / 整机信息 ---------- */
+let reportData = null;      // 最近一次采集结果
+let reportFilter = "all";   // all / issues
+
+function esc(t) {
+  return String(t == null ? "" : t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+function switchPane(name) {
+  document.querySelectorAll(".vtab").forEach((b) => b.classList.toggle("on", b.dataset.pane === name));
+  $("paneInfo").hidden = name !== "info";
+  $("paneDiag").hidden = name !== "diag";
+}
+
 $("btnVerify").onclick = () => {
   openSheet($("sheetVerify"));
-  $("verifyBody").innerHTML = '<div class="verify-loading">正在采集电池与磁盘数据…</div>';
-  call("verify").then((r) => { if (r.verify) renderVerify(r.verify); });
+  switchPane("info");
+  loadInspect();
 };
 $("btnCloseVerify").onclick = () => closeSheet($("sheetVerify"));
+document.querySelectorAll(".vtab").forEach((b) => {
+  b.onclick = () => switchPane(b.dataset.pane);
+});
 
-function renderVerify(v) {
-  const b = v.battery || {};
-  const d = v.disk || {};
+$("btnReInspect").onclick = () => loadInspect();
+$("btnExportTxt").onclick = () => exportReport("txt");
+$("btnExportJson").onclick = () => exportReport("json");
 
-  let battTag = "good", battLabel = "优";
-  if (b.health < 70) { battTag = "bad"; battLabel = "建议更换"; }
-  else if (b.health < 85) { battTag = "warn"; battLabel = "良好"; }
-  const battBar = b.health >= 70 ? (b.health >= 85 ? "" : "warn") : "bad";
+function exportReport(fmt) {
+  call("exportInspect", { format: fmt }).then((r) => {
+    if (r && r.ok) toast("已导出到 " + r.path);
+    else toast("导出已取消", true);
+  });
+}
 
-  const writeTB = (d.write_gb || 0) / 1000;
-  let diskTag = "good", diskLabel = "健康";
-  if (writeTB > 300) { diskTag = "bad"; diskLabel = "写入较多"; }
-  else if (writeTB > 100) { diskTag = "warn"; diskLabel = "正常使用"; }
-  const diskHealth = Math.max(0, Math.min(100, Math.round(100 - (writeTB / 600) * 100)));
-  const diskBar = diskHealth >= 70 ? "" : (diskHealth >= 40 ? "warn" : "bad");
+function loadInspect() {
+  $("verifyBody").innerHTML =
+    '<div class="verify-loading">正在采集整机信息…<div class="vl-sub">读取机型标识、序列号、芯片、硬盘、电池、屏幕、摄像头、无线与安全状态，约 2～5 秒</div></div>';
+  call("inspect").then((r) => {
+    if (r && r.report && r.report.sections && r.report.sections.length) {
+      reportData = r.report;
+      renderReport();
+    } else {
+      $("verifyBody").innerHTML =
+        '<div class="verify-loading">这次没读到数据，点上方「重新采集」再试一次。</div>';
+    }
+  });
+}
 
-  const score = b.health >= 0 ? b.health : 100;
-  let verdict = "good", vTitle = "状态良好", vDesc = "电池与磁盘均在健康范围，这台机器的硬件状况看起来不错。";
-  if (battTag === "bad" || diskTag === "bad") { verdict = "bad"; vTitle = "建议检修"; vDesc = "电池或磁盘损耗明显，建议尽快到店检测或更换，使用中留意发热与续航。"; }
-  else if (battTag === "warn" || diskTag === "warn") { verdict = "warn"; vTitle = "正常损耗"; vDesc = "这台机器有一定使用痕迹，属正常老化范围，日常使用没有大碍。"; }
+function renderReport() {
+  const rep = reportData;
+  const s = rep.summary || {};
+  const verdict = s.verdict || "good";
+  const scoreTxt = verdict === "good" ? "通过" : (verdict === "warn" ? "留意" : "异常");
 
-  const cyc = b.cycle >= 0 ? b.cycle : "—";
-  const des = b.design > 0 ? b.design + " mAh" : "—";
-  const full = b.full > 0 ? b.full + " mAh" : "—";
-
-  $("verifyBody").innerHTML = `
+  let html = `
     <div class="verdict ${verdict}">
-      <div class="v-score">${score}</div>
+      <div class="v-score sm">${scoreTxt}</div>
       <div>
-        <div class="v-title">${vTitle}</div>
-        <div class="v-desc">${vDesc}</div>
+        <div class="v-title">${esc(s.title)}</div>
+        <div class="v-desc">${esc(s.desc)}</div>
+        <div class="v-meta">${s.total} 项已查 · 正常 ${s.ok} · 留意 ${s.warn} · 异常 ${s.bad} · ${esc(s.time)}</div>
       </div>
     </div>
 
-    <div class="verify-card">
-      <h4>机器信息</h4>
-      <div class="vr"><span class="k">机型</span><span class="v">${v.model}</span></div>
-      <div class="vr"><span class="k">序列号</span><span class="v">${v.serial || "—"}</span></div>
-      <div class="vr"><span class="k">芯片</span><span class="v">${v.chip}</span></div>
-      <div class="vr"><span class="k">图形</span><span class="v">${v.gpu}</span></div>
-      <div class="vr"><span class="k">内存</span><span class="v">${v.ram} GB</span></div>
-      <div class="vr"><span class="k">系统</span><span class="v">macOS ${v.macos}</span></div>
-    </div>
+    <div class="fchip-row">
+      <button class="fchip ${reportFilter === "all" ? "on" : ""}" data-f="all">全部 ${s.total} 项</button>
+      <button class="fchip ${reportFilter === "issues" ? "on" : ""}" data-f="issues">只看需留意 ${(s.warn || 0) + (s.bad || 0)} 项</button>
+    </div>`;
 
-    <div class="verify-card">
-      <h4>电池健康<span class="tag ${battTag}">${battLabel}</span></h4>
-      <div class="hbar"><span class="${battBar}" style="width:${b.health >= 0 ? b.health : 0}%"></span></div>
-      <div class="vr"><span class="k">健康度</span><span class="v">${b.health >= 0 ? b.health + "%" : "—"}</span></div>
-      <div class="vr"><span class="k">循环次数</span><span class="v">${cyc} 次</span></div>
-      <div class="vr"><span class="k">当前满充</span><span class="v">${full}</span></div>
-      <div class="vr"><span class="k">设计容量</span><span class="v">${des}</span></div>
-      <div class="vr"><span class="k">状态</span><span class="v">${b.condition || "—"}</span></div>
-    </div>
+  rep.sections.forEach((sec) => {
+    const items = reportFilter === "issues"
+      ? sec.items.filter((it) => it.level === "warn" || it.level === "bad")
+      : sec.items;
+    if (!items.length) return;
+    const issues = sec.items.filter((it) => it.level === "warn" || it.level === "bad").length;
+    html += `
+      <div class="sec-card">
+        <div class="sec-hd">
+          <div>
+            <div class="sec-t">${esc(sec.title)}</div>
+            <div class="sec-s">${esc(sec.sub)}</div>
+          </div>
+          ${issues ? `<span class="sec-badge ${sec.items.some((i) => i.level === "bad") ? "bad" : "warn"}">${issues}</span>` : ""}
+        </div>
+        <div class="sec-items">`;
 
-    <div class="verify-card">
-      <h4>磁盘寿命<span class="tag ${diskTag}">${diskLabel}</span></h4>
-      <div class="hbar"><span class="${diskBar}" style="width:${diskHealth}%"></span></div>
-      <div class="vr"><span class="k">累计写入</span><span class="v">${writeTB.toFixed(2)} TB</span></div>
-      <div class="vr"><span class="k">累计读取</span><span class="v">${((d.read_gb || 0) / 1000).toFixed(2)} TB</span></div>
-      <div class="vr"><span class="k">估算寿命</span><span class="v">${diskHealth}%</span></div>
-    </div>
-
-    <div style="font-size:.78em;color:var(--text-3);line-height:1.6">仅供参考：电池健康度来自系统数据；磁盘寿命按累计写入量与典型 SSD 写入寿命估算；序列号可用于在 Apple 官网查询保修与激活状态。</div>`;
-}
-$("btnClearHistory").onclick = () => call("clearHistory").then(loadHistory);
-$("btnAgain").onclick = () => closeSheet($("sheet"));
-$("btnCopy").onclick = copyReport;
-$("btnImage").onclick = exportImage;
-
-function copyReport() {
-  const s = window._report; if (!s) return;
-  const txt =
-`烤机台成绩单
-机型  ${info.display_name} · ${info.chip} · ${info.ncpu} 核 · ${info.memory_gb}GB
-模式  ${(MODES.find((m) => m.id === s.mode) || {}).name}
-评级  ${s.grade} —— ${s.desc}
-时长  ${Math.round(s.dur)}s    CPU 峰值 ${s.peakCpu.toFixed(0)}°C    GPU 峰值 ${s.peakGpu.toFixed(0)}°C
-功耗  芯片峰值 ${s.peakAll.toFixed(1)}W / 均值 ${s.avg.toFixed(1)}W    整机峰值 ${s.peakSys.toFixed(0)}W
-风扇  ${s.maxFan > 0 ? Math.round(s.maxFan) + " RPM" : "无风扇"}    ${s.throttled ? "期间有降频" : "全程不降频"}
-${s.badges.join(" · ")}`;
-  const done = () => {
-    const b = $("btnCopy"); b.textContent = "已拷贝";
-    setTimeout(() => (b.textContent = "拷贝成绩"), 1600);
-  };
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(txt).then(done).catch(() => fallbackCopy(txt, done));
-  } else fallbackCopy(txt, done);
-}
-function fallbackCopy(txt, done) {
-  const ta = document.createElement("textarea");
-  ta.value = txt; ta.style.position = "fixed"; ta.style.opacity = "0";
-  document.body.appendChild(ta); ta.select();
-  document.execCommand("copy"); ta.remove(); done();
-}
-
-// 成绩单导出成 PNG，直接发群
-function exportImage() {
-  const s = window._report; if (!s) return;
-  const W = 1080, H = 1440;
-  const cv = document.createElement("canvas");
-  cv.width = W; cv.height = H;
-  const g = cv.getContext("2d");
-  const dark = document.documentElement.dataset.theme !== "light";
-  g.fillStyle = dark ? "#141416" : "#F5F5F7";
-  g.fillRect(0, 0, W, H);
-  g.fillStyle = dark ? "#F5F5F7" : "#1D1D1F";
-  g.textBaseline = "top";
-  g.font = "600 40px -apple-system,'PingFang SC',sans-serif";
-  g.fillText("烤机台成绩单", 80, 80);
-  g.font = "24px -apple-system,'PingFang SC',sans-serif";
-  g.fillStyle = dark ? "rgba(235,235,245,.6)" : "rgba(60,60,67,.6)";
-  g.fillText(info.display_name + " · " + info.chip, 80, 140);
-  g.fillText((MODES.find((m) => m.id === s.mode) || {}).name + " · 持续 " + Math.round(s.dur) + " 秒", 80, 176);
-
-  g.fillStyle = "#0A84FF";
-  g.beginPath();
-  if (g.roundRect) g.roundRect(80, 250, 210, 210, 42); else g.rect(80, 250, 210, 210);
-  g.fill();
-  g.fillStyle = "#fff";
-  g.font = "300 140px -apple-system,sans-serif";
-  g.fillText(s.grade, 138, 282);
-  g.fillStyle = dark ? "#F5F5F7" : "#1D1D1F";
-  g.font = "500 34px -apple-system,'PingFang SC',sans-serif";
-  g.fillText(s.desc, 340, 300);
-  g.font = "24px -apple-system,'PingFang SC',sans-serif";
-  g.fillStyle = dark ? "rgba(235,235,245,.6)" : "rgba(60,60,67,.6)";
-  g.fillText("芯片功耗均值 " + s.avg.toFixed(1) + " W · 峰值 " + s.peakAll.toFixed(1) + " W", 340, 352);
-
-  const rows = [
-    ["CPU 峰值", s.peakCpu.toFixed(0) + " °C"],
-    ["GPU 峰值", s.peakGpu.toFixed(0) + " °C"],
-    ["整机峰值", s.peakSys.toFixed(0) + " W"],
-    ["风扇最高", s.maxFan > 0 ? Math.round(s.maxFan) + " RPM" : "无风扇"],
-    ["P 核频率", Math.round(s.minPF) + " – " + Math.round(s.maxPF) + " MHz"],
-    ["是否降频", s.throttled ? "有" : "没有"],
-  ];
-  rows.forEach(([k, v], i) => {
-    const x = 80 + (i % 2) * 470, y = 540 + Math.floor(i / 2) * 130;
-    g.fillStyle = dark ? "rgba(255,255,255,.05)" : "rgba(0,0,0,.035)";
-    g.beginPath();
-    if (g.roundRect) g.roundRect(x, y, 440, 110, 20); else g.rect(x, y, 440, 110);
-    g.fill();
-    g.fillStyle = dark ? "rgba(235,235,245,.55)" : "rgba(60,60,67,.6)";
-    g.font = "22px -apple-system,'PingFang SC',sans-serif";
-    g.fillText(k, x + 26, y + 22);
-    g.fillStyle = dark ? "#F5F5F7" : "#1D1D1F";
-    g.font = "400 34px -apple-system,'PingFang SC',sans-serif";
-    g.fillText(v, x + 26, y + 56);
+    items.forEach((it) => {
+      const lv = it.level === "bad" ? "bad" : (it.level === "warn" ? "warn" : (it.level === "ok" ? "ok" : ""));
+      html += `
+          <div class="it ${lv}">
+            <div class="it-row"><span class="it-k">${esc(it.k)}</span><span class="it-v">${esc(it.v)}</span></div>
+            ${it.note ? `<div class="it-n">${esc(it.note)}</div>` : ""}
+          </div>`;
+    });
+    html += `</div></div>`;
   });
 
-  g.font = "24px -apple-system,'PingFang SC',sans-serif";
-  let y = 990;
-  s.badges.forEach((b) => {
-    g.fillStyle = dark ? "rgba(255,255,255,.07)" : "rgba(0,0,0,.05)";
-    const w = g.measureText(b).width + 40;
-    g.beginPath();
-    if (g.roundRect) g.roundRect(80, y, w, 46, 23); else g.rect(80, y, w, 46);
-    g.fill();
-    g.fillStyle = dark ? "#F5F5F7" : "#1D1D1F";
-    g.fillText(b, 100, y + 10);
-    y += 58;
+  html += `
+    <div class="verify-card">
+      <h4>换件核验入口</h4>
+      <div class="it-n" style="margin-bottom:10px">「部件与服务历史」由苹果掌握，命令行读不到。点下面按钮打开系统信息，看「硬件 → 部件与服务历史」：空白代表没走过官方换件；有记录会直接列出换过什么、什么时候换的。</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn ghost tiny" id="btnParts">打开部件与服务历史</button>
+        <button class="btn ghost tiny" id="btnDiagJump">去做 Apple 诊断</button>
+      </div>
+    </div>
+
+    <div class="it-n" style="padding:2px 2px 4px">说明：以上全部来自系统只读接口，未拆机、未改动任何设置。软件读不到的部件（键盘上盖、风扇、I/O 板等），只能以官方「部件与服务历史」为准；激活锁处于启用状态时，二手购入务必先让卖家在「查找」中移除。</div>`;
+
+  $("verifyBody").innerHTML = html;
+
+  document.querySelectorAll(".fchip").forEach((b) => {
+    b.onclick = () => { reportFilter = b.dataset.f; renderReport(); };
   });
-
-  g.fillStyle = dark ? "rgba(235,235,245,.35)" : "rgba(60,60,67,.4)";
-  g.font = "20px -apple-system,'PingFang SC',sans-serif";
-  g.fillText(new Date().toLocaleString("zh-CN") + " · 数据来自本机 macmon", 80, H - 70);
-
-  const url = cv.toDataURL("image/png");
-  call("exportImage", { data: url.split(",")[1] });
-  toast("已打开存储面板");
+  const bp = $("btnParts");
+  if (bp) bp.onclick = () => call("openPartsHistory").then((r) => {
+    toast(r && r.ok ? "已打开「系统信息」，请点左侧「硬件」" : "打开失败，请手动打开「系统信息」", !(r && r.ok));
+  });
+  const bdj = $("btnDiagJump");
+  if (bdj) bdj.onclick = () => switchPane("diag");
 }
+
+/* ---------- Apple 内置诊断 ---------- */
+$("btnDiagCancel").onclick = () => switchPane("info");
+$("btnDiagStart").onclick = () => {
+  $("diagActions").hidden = true;
+  $("diagConfirm").hidden = false;
+};
+$("btnDiagNo").onclick = () => {
+  $("diagConfirm").hidden = true;
+  $("diagActions").hidden = false;
+};
+$("btnDiagYes").onclick = () => {
+  call("shutdownDiag", { confirm: true }).then((r) => {
+    if (r && r.ok) {
+      $("diagConfirm").innerHTML =
+        '<div class="dc-t">正在关机…</div><div class="dc-d">屏幕黑掉后，请立刻按住电源键（Touch ID 那个键）不放约 10 秒，看到 Apple 标志和转圈再松手。</div>';
+    } else {
+      toast("关机指令未执行，请手动关机", true);
+      $("diagConfirm").hidden = true;
+      $("diagActions").hidden = false;
+    }
+  });
+};
 
 /* ---------- 设置 ---------- */
 function applySettings(s) {

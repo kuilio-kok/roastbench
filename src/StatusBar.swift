@@ -71,6 +71,14 @@ final class StatusBarController: NSObject {
         NSApp.dockTile.badgeLabel = Burner.shared.running ? "\(t)°" : nil
     }
 
+    /// 退出时撤掉菜单栏图标与定时器，避免残留与"僵尸"计时器
+    func uninstall() {
+        timer?.invalidate()
+        timer = nil
+        if let it = item { NSStatusBar.system.removeStatusItem(it) }
+        item = nil
+    }
+
     @objc private func onStart() {
         NotificationCenter.default.post(name: .uiAction, object: "start")
     }

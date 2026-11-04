@@ -367,7 +367,7 @@
 
     <div class="set-group">
       <div class="sec-title" data-i18n="关于">关于</div>
-      <div class="row"><div class="row-label">版本</div><span class="row-val">2.4.0</span></div>
+      <div class="row"><div class="row-label">版本</div><span class="row-val">2.9.0</span></div>
       <div class="row">
         <div class="row-label">硬件详情<span class="row-sub">完整系统信息</span></div>
         <button class="btn ghost tiny" id="btnHardware">查看</button>
@@ -441,15 +441,77 @@
         </span>
         <div class="grow">
           <div class="c-title big">验机报告</div>
-          <div class="set-sub">电池 · 磁盘 · 配置 全面体检</div>
+          <div class="set-sub">整机信息 · 原装性核对 · Apple 内置诊断</div>
         </div>
       </div>
       <button class="close-btn" id="btnCloseVerify" title="关闭">
         <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M5.5 5.5l9 9M14.5 5.5l-9 9"/></svg>
       </button>
     </div>
-    <div class="verify-body" id="verifyBody">
-      <div class="verify-loading">正在采集电池与磁盘数据…</div>
+
+    <div class="vtab-bar">
+      <button class="vtab on" data-pane="info">整机信息</button>
+      <button class="vtab" data-pane="diag">Apple 诊断</button>
+    </div>
+
+    <div id="paneInfo">
+      <div class="v-actions">
+        <button class="btn ghost tiny" id="btnReInspect">重新采集</button>
+        <span class="v-gap"></span>
+        <button class="btn ghost tiny" id="btnExportTxt">导出文本</button>
+        <button class="btn ghost tiny" id="btnExportJson">导出 JSON</button>
+      </div>
+      <div class="verify-body" id="verifyBody">
+        <div class="verify-loading">正在采集整机信息…</div>
+      </div>
+    </div>
+
+    <div id="paneDiag" hidden>
+      <div class="verify-body">
+        <div class="diag-hero">
+          <div class="diag-hero-t">Apple 内置诊断（Apple Diagnostics）</div>
+          <div class="diag-hero-d">这是苹果官方的硬件自检，能查主板、内存、屏幕、电池、摄像头、传感器等部件是否正常，是软件层最有说服力的一步。</div>
+        </div>
+
+        <div class="diag-note accent">
+          <b>Apple 芯片机型（M1 及以后）</b>：不能开机按 D，必须先<strong>完全关机</strong>，再<strong>长按电源键</strong>进入。下面按你的机型给步骤。
+        </div>
+
+        <div class="diag-steps">
+          <div class="dstep"><span class="dn">1</span><div><b>先保存手上所有工作</b><div class="dd">进入诊断会重启电脑，没保存的文档会丢失。</div></div></div>
+          <div class="dstep"><span class="dn">2</span><div><b>点下方按钮，让 App 帮你关机</b><div class="dd">关机过程中别合盖、别拔电源（插着电做诊断更准）。</div></div></div>
+          <div class="dstep"><span class="dn">3</span><div><b>屏幕完全黑掉后，按住电源键不放</b><div class="dd">Touch ID 那个键，就是电源键。一直按住，大概 10 秒。</div></div></div>
+          <div class="dstep"><span class="dn">4</span><div><b>看到 Apple 标志和转圈再松手</b><div class="dd">松早了会正常开机，等于白做，重新关机再来一次即可。</div></div></div>
+          <div class="dstep"><span class="dn">5</span><div><b>出现语言选择界面就说明进来了</b><div class="dd">选「简体中文」→ 按提示点「诊断」，然后放着等，别碰键盘。</div></div></div>
+          <div class="dstep"><span class="dn">6</span><div><b>2～5 分钟后出结果</b><div class="dd">显示「未发现问题」或 <b>ADP000</b> 就是全通过；出现其它代码（如 NDR、PPT、VDC、NDD 等）说明对应部件有故障，记下代码。</div></div></div>
+        </div>
+
+        <div class="diag-note">
+          <b>Intel 机型</b>：关机后按电源键开机，听到启动音或看到灰屏时立刻按住 <b>D</b> 键，直到诊断界面出现。此入口对 Apple 芯片无效。
+        </div>
+
+        <div class="diag-warn">
+          <b>注意：这一步会重启你的电脑。</b>必须由你本人确认后才会执行，App 不会自己重启。
+        </div>
+
+        <div class="diag-actions" id="diagActions">
+          <button class="btn ghost" id="btnDiagCancel">先不做，返回</button>
+          <button class="btn primary" id="btnDiagStart">关机并进入诊断</button>
+        </div>
+
+        <div class="diag-confirm" id="diagConfirm" hidden>
+          <div class="dc-t">确认现在就重启进入诊断？</div>
+          <div class="dc-d">请确认所有文件已保存。点击「确认重启」后，电脑会在约 1 秒内开始关机，之后请立刻按住电源键不放。</div>
+          <div class="dc-btns">
+            <button class="btn ghost tiny" id="btnDiagNo">取消</button>
+            <button class="btn primary tiny danger" id="btnDiagYes">确认重启</button>
+          </div>
+        </div>
+
+        <div class="diag-note">
+          做完诊断回到系统后，建议再来这个页面导出一份报告，把诊断结果代码一起记下来，验机留档更完整。
+        </div>
+      </div>
     </div>
   </div>
 </div>

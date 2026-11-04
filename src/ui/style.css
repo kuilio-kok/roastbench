@@ -529,3 +529,62 @@ body[data-density="relaxed"] .dashboard{gap:16px}
 .hbar span{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,var(--c-fan),#34C759);transition:width .6s var(--ease)}
 .hbar span.warn{background:linear-gradient(90deg,#FF9F0A,#FFD60A)}
 .hbar span.bad{background:linear-gradient(90deg,#FF453A,#FF7A45)}
+
+/* ---------- 验机报告 v2.9：整机信息 / 原装性 / Apple 诊断 ---------- */
+.vtab-bar{display:flex;gap:6px;padding:0 20px 12px;border-bottom:1px solid var(--hair)}
+.vtab{flex:1;height:32px;border:none;border-radius:9px;background:var(--seg-bg);color:var(--text-2);font-size:.9em;font-weight:500;cursor:pointer;transition:background .16s,color .16s}
+.vtab:hover{background:var(--panel-hi);color:var(--text)}
+.vtab.on{background:var(--accent);color:#fff}
+.v-actions{display:flex;align-items:center;gap:8px;padding:12px 20px 0}
+.v-gap{flex:1}
+.verify-loading .vl-sub{font-size:.86em;color:var(--text-3);margin-top:8px;line-height:1.6;padding:0 12px}
+.verdict .v-score.sm{font-size:.92em;font-weight:600;letter-spacing:.5px;border-radius:14px;width:56px;height:56px;line-height:1.15;padding:0 4px;text-align:center}
+.verdict .v-meta{font-size:.78em;color:var(--text-3);margin-top:6px;font-variant-numeric:tabular-nums}
+.verdict.warn{background:linear-gradient(160deg,color-mix(in srgb,var(--c-cpu) 14%,transparent),transparent);border-color:color-mix(in srgb,var(--c-cpu) 35%,transparent)}
+.verdict.bad{background:linear-gradient(160deg,color-mix(in srgb,var(--c-gpu) 14%,transparent),transparent);border-color:color-mix(in srgb,var(--c-gpu) 35%,transparent)}
+.fchip-row{display:flex;gap:8px;flex-wrap:wrap}
+.fchip{height:28px;padding:0 12px;border-radius:20px;border:1px solid var(--hair-strong);background:var(--inset);color:var(--text-2);font-size:.82em;cursor:pointer;transition:all .16s}
+.fchip:hover{color:var(--text);border-color:var(--hair-strong)}
+.fchip.on{background:var(--accent);border-color:transparent;color:#fff}
+.sec-card{background:var(--inset);border:1px solid var(--hair);border-radius:12px;overflow:hidden}
+.sec-hd{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;background:var(--panel);border-bottom:1px solid var(--hair)}
+.sec-t{font-size:.94em;font-weight:600}
+.sec-s{font-size:.78em;color:var(--text-3);margin-top:2px}
+.sec-badge{flex:none;min-width:20px;height:20px;padding:0 6px;border-radius:20px;font-size:.75em;font-weight:600;color:#fff;display:flex;align-items:center;justify-content:center}
+.sec-badge.warn{background:#FF9F0A}
+.sec-badge.bad{background:#FF453A}
+.sec-items{padding:4px 16px 10px}
+.it{padding:8px 0;border-bottom:1px solid var(--hair);position:relative}
+.it:last-child{border-bottom:none}
+.it-row{display:flex;align-items:baseline;justify-content:space-between;gap:14px;font-size:.88em}
+.it-k{color:var(--text-3);flex:none}
+.it-v{color:var(--text);font-weight:500;text-align:right;word-break:break-all;font-variant-numeric:tabular-nums}
+.it-n{font-size:.78em;color:var(--text-3);line-height:1.55;margin-top:3px}
+.it.warn{padding-left:10px;border-left:2px solid #FF9F0A;margin-left:-10px;padding-right:10px;margin-right:-10px}
+.it.warn .it-v{color:#FF9F0A}
+.it.bad{padding-left:10px;border-left:2px solid #FF453A;margin-left:-10px;padding-right:10px;margin-right:-10px;background:color-mix(in srgb,var(--c-gpu) 7%,transparent);border-radius:0 8px 8px 0}
+.it.bad .it-v{color:#FF6B60;font-weight:600}
+.it.bad .it-n{color:#FF9A90}
+.it.ok .it-v{color:var(--text)}
+.diag-hero{padding:16px;border-radius:12px;background:linear-gradient(160deg,color-mix(in srgb,var(--accent) 12%,transparent),transparent);border:1px solid color-mix(in srgb,var(--accent) 28%,transparent)}
+.diag-hero-t{font-size:.98em;font-weight:600;margin-bottom:6px}
+.diag-hero-d{font-size:.84em;color:var(--text-2);line-height:1.65}
+.diag-note{font-size:.83em;color:var(--text-2);line-height:1.7;background:var(--inset);border:1px solid var(--hair);border-radius:10px;padding:12px 14px}
+.diag-note.accent{border-color:color-mix(in srgb,var(--accent) 35%,transparent);background:color-mix(in srgb,var(--accent) 8%,transparent)}
+.diag-note b{color:var(--text)}
+.diag-warn{font-size:.84em;line-height:1.7;color:#FFB020;background:color-mix(in srgb,#FF9F0A 10%,transparent);border:1px solid color-mix(in srgb,#FF9F0A 35%,transparent);border-radius:10px;padding:12px 14px}
+.diag-steps{display:flex;flex-direction:column;gap:2px}
+.dstep{display:flex;gap:12px;padding:9px 0;border-bottom:1px solid var(--hair)}
+.dstep:last-child{border-bottom:none}
+.dstep .dn{flex:none;width:22px;height:22px;border-radius:50%;background:var(--seg-bg);color:var(--text-2);font-size:.78em;font-weight:600;display:flex;align-items:center;justify-content:center;margin-top:1px}
+.dstep b{font-size:.88em;font-weight:600;display:block}
+.dstep .dd{font-size:.8em;color:var(--text-3);line-height:1.6;margin-top:2px}
+.diag-actions{display:flex;gap:10px}
+.diag-actions .btn{flex:1}
+.diag-confirm{border:1px solid color-mix(in srgb,#FF453A 45%,transparent);background:color-mix(in srgb,#FF453A 9%,transparent);border-radius:12px;padding:14px 16px}
+.dc-t{font-size:.92em;font-weight:600;color:#FF6B60}
+.dc-d{font-size:.82em;color:var(--text-2);line-height:1.65;margin-top:6px}
+.dc-btns{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
+.btn.danger{background:linear-gradient(180deg,#FF453A,#D70015)}
+.btn.danger:hover{background:linear-gradient(180deg,#FF6B60,#E0001A)}
+[hidden]{display:none !important}
