@@ -468,7 +468,7 @@ enum Inspector {
     private static func textReport(summary: String, sections: [Section], time: String) -> String {
         let info = MachineHolder.shared.machine.info
         var out = ""
-        out += "烤机台 · 整机信息与验机报告\n"
+        out += "Mac 工具箱 · 整机信息与验机报告\n"
         out += "生成时间：\(time)\n"
         out += "设备：\(info.displayName)（\(info.modelId)）· \(info.chip) · \(info.memoryGB) GB · macOS \(info.macos)\n"
         out += String(repeating: "=", count: 46) + "\n\n"
@@ -549,7 +549,7 @@ enum Inspector {
 
         let panel = NSSavePanel()
         panel.title = isJSON ? "导出验机报告（JSON）" : "导出验机报告（文本）"
-        panel.nameFieldStringValue = "烤机台-验机报告-\(stamp).\(isJSON ? "json" : "txt")"
+        panel.nameFieldStringValue = "Mac工具箱-验机报告-\(stamp).\(isJSON ? "json" : "txt")"
         panel.canCreateDirectories = true
         guard panel.runModal() == .OK, let url = panel.url else { return "" }
         do {

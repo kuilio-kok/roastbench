@@ -13,7 +13,7 @@ final class StatusBarController: NSObject {
         let it = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item = it
 
-        if let img = NSImage(systemSymbolName: "thermometer.medium", accessibilityDescription: "烤机台") {
+        if let img = NSImage(systemSymbolName: "thermometer.medium", accessibilityDescription: "Mac 工具箱") {
             img.isTemplate = true
             it.button?.image = img
             it.button?.imagePosition = .imageLeading
@@ -49,7 +49,7 @@ final class StatusBarController: NSObject {
         let show = NSMenuItem(title: "显示主窗口", action: #selector(onShow), keyEquivalent: "")
         show.target = self
         menu.addItem(show)
-        let quit = NSMenuItem(title: "退出烤机台", action: #selector(onQuit), keyEquivalent: "q")
+        let quit = NSMenuItem(title: "退出 Mac 工具箱", action: #selector(onQuit), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
 

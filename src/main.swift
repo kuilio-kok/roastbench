@@ -34,7 +34,7 @@ func sysctlString(_ key: String) -> String {
 func wallpaperFilePath() -> URL? {
     guard let dir = try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
                                                  appropriateFor: nil, create: true) else { return nil }
-    let sub = dir.appendingPathComponent("烤机台")
+    let sub = dir.appendingPathComponent("Mac 工具箱")
     try? FileManager.default.createDirectory(at: sub, withIntermediateDirectories: true)
     return sub.appendingPathComponent("wallpaper.jpg")
 }
@@ -953,7 +953,7 @@ final class Burner {
 
         // 防睡眠：烤机期间不允许系统休眠
         if !hasAssertion {
-            let name = "烤机台压测中" as CFString
+            let name = "Mac 工具箱压测中" as CFString
             let r = IOPMAssertionCreateWithName(kIOPMAssertionTypeNoIdleSleep as CFString,
                                                 IOPMAssertionLevel(kIOPMAssertionLevelOn),
                                                 name, &sleepAssertion)
@@ -1113,7 +1113,7 @@ final class MainController: NSViewController, WKScriptMessageHandler {
         }
         NotificationCenter.default.addObserver(forName: .burnFinished, object: nil, queue: .main) { _ in
             let content = UNMutableNotificationContent()
-            content.title = "烤机完成"
+            content.title = "Mac 工具箱 · 压测完成"
             content.body = "这一轮结束了，成绩单已经生成。"
             let req = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
             UNUserNotificationCenter.current().add(req) { _ in }
@@ -1292,9 +1292,9 @@ final class MainController: NSViewController, WKScriptMessageHandler {
 
         case "title":
             // 页面切分区时同步窗口标题（隐藏标题栏也影响 Mission Control / 窗口菜单）
-            let t = body["text"] as? String ?? "烤机台"
+            let t = body["text"] as? String ?? "Mac 工具箱"
             for w in NSApp.windows where w.contentViewController is MainController {
-                w.title = "烤机台 · " + t
+                w.title = "Mac 工具箱 · " + t
             }
             notice(id, "{\"ok\":true}")
 
@@ -1450,7 +1450,7 @@ final class MainController: NSViewController, WKScriptMessageHandler {
     private func savePNG(_ data: Data) {
         DispatchQueue.main.async {
             let panel = NSSavePanel()
-            panel.nameFieldStringValue = "烤机台成绩单.png"
+            panel.nameFieldStringValue = "Mac工具箱-成绩单.png"
             panel.allowedContentTypes = [.png]
             guard panel.runModal() == .OK, let url = panel.url else { return }
             try? data.write(to: url)
@@ -1523,7 +1523,7 @@ final class MainController: NSViewController, WKScriptMessageHandler {
         }
         DispatchQueue.main.async {
             let panel = NSSavePanel()
-            panel.nameFieldStringValue = "烤机台数据.csv"
+            panel.nameFieldStringValue = "Mac工具箱-数据.csv"
             panel.allowedContentTypes = [.commaSeparatedText]
             panel.canCreateDirectories = true
             guard panel.runModal() == .OK, let url = panel.url else { return }
@@ -1546,14 +1546,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         Settings.shared.applyTheme()
-        NSApp.applicationIconImage = IconFactory.make()
+        AppIconManager.start()
         buildMenu()
 
         let frame = NSRect(x: 0, y: 0, width: 1200, height: 780)
         let win = NSWindow(contentRect: frame,
                            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                            backing: .buffered, defer: false)
-        win.title = "烤机台"
+        win.title = "Mac 工具箱"
         win.titlebarAppearsTransparent = true
         win.titleVisibility = .hidden
         win.isMovableByWindowBackground = true
@@ -1597,9 +1597,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
-        appMenu.addItem(NSMenuItem(title: "关于烤机台", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: ""))
+        appMenu.addItem(NSMenuItem(title: "关于 Mac 工具箱", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: ""))
         appMenu.addItem(NSMenuItem.separator())
-        appMenu.addItem(NSMenuItem(title: "退出烤机台", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        appMenu.addItem(NSMenuItem(title: "退出 Mac 工具箱", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         appItem.submenu = appMenu
         menu.addItem(appItem)
 

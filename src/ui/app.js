@@ -1,4 +1,4 @@
-/* 烤机台 v1.2 —— 平滑曲线 / 新玩法 / 拖动 / 紧凑 / 导出图片 */
+/* Mac 工具箱 v3.1 —— 平滑曲线 / 拖动布局 / 分区导航 / 导出图片 */
 
 /* ---------- 图标 ---------- */
 const ICON = {
@@ -203,20 +203,17 @@ function renderNav() {
         </button>`).join("")}
     </div>`).join("");
   nav.querySelectorAll("[data-nav]").forEach((b) => { b.onclick = () => navigate(b.dataset.nav); });
-  $("runMini").onclick = () => navigate("burn");
 }
 
 /* ---------- 总览页 ---------- */
 function overviewCardsHTML() {
   return navModules().map((m) => `
-    <article class="ov-card" data-go="${m.id}" tabindex="0" role="button">
+    <article class="ov-card" data-go="${m.id}" tabindex="0" role="button" title="${esc(m.desc)}">
       <div class="ov-top">
         <span class="ov-ico">${m.icon}</span>
         ${moduleBadge(m)}
       </div>
       <div class="ov-name">${esc(m.name)}</div>
-      <div class="ov-desc">${esc(m.desc)}</div>
-      <div class="ov-go">进入<span class="ov-arrow">›</span></div>
     </article>`).join("");
 }
 
@@ -256,7 +253,6 @@ function ensurePages() {
       sec.innerHTML = `
         <header class="ov-hero">
           <div class="ov-hero-t">${esc(m.name)}</div>
-          <div class="ov-hero-d">${esc(m.desc)}</div>
           <div class="ov-device" id="ovDevice">正在识别本机…</div>
         </header>
         <div class="ov-grid" id="ovGrid"></div>`;
@@ -277,9 +273,9 @@ function navigate(id) {
   document.querySelectorAll("#pages .page").forEach((p) => p.classList.toggle("on", p.id === "page-" + id));
   document.querySelectorAll("[data-nav]").forEach((b) => b.classList.toggle("on", b.dataset.nav === id));
   const crumb = $("crumb");
-  const crumbText = m.group ? `${m.group} / ${m.name}` : m.name;
+  const crumbText = m.name;
   if (crumb) crumb.textContent = crumbText;
-  document.title = `${crumbText} · 烤机台`;
+  document.title = `Mac 工具箱 · ${crumbText}`;
   call("title", { text: crumbText });
   document.body.dataset.page = id;
   const pages = $("pages");
@@ -757,7 +753,6 @@ function frame(t) {
   drawSpark("sp2", "gt", () => C["c-gpu"]);
   drawSpark("sp3", "aw", () => C["c-all"]);
   drawSpark("sp4", "fan", () => C["c-fan"]);
-  $("beat").classList.toggle("on", idle < intervalMs * 2.2);
   rafId = requestAnimationFrame(frame);
 }
 function redrawAll() {
@@ -1002,6 +997,8 @@ function showSheet(s) {
   $("rBadges").innerHTML = s.badges.map((b) => `<span>${b}</span>`).join("");
   openSheet($("sheet"));
   window._report = s;
+  const again = $("btnAgain");
+  if (again) again.onclick = () => closeSheet($("sheet"));
 }
 
 function loadHistory() {
@@ -1167,17 +1164,6 @@ function renderSeriesColors() {
   });
 }
 
-$("hueSlider").oninput = (e) => {
-  const hex = hslToHex(Number(e.target.value), 70, 52);
-  $("hueVal").textContent = hex.toUpperCase();
-  $("accentCustom").value = hex;
-  document.documentElement.style.setProperty("--accent", hex);
-  document.documentElement.style.setProperty("--accent-press", shade(hex, -26));
-};
-$("hueSlider").onchange = (e) => {
-  const hex = hslToHex(Number(e.target.value), 70, 52);
-  call("set", { key: "accent", value: hex }).then((r) => r.settings && applySettings(r.settings));
-};
 $("customIvl").onchange = (e) => {
   const v = Math.max(100, Math.min(5000, Number(e.target.value) || 250));
   call("set", { key: "interval", value: v }).then((r) => r.settings && applySettings(r.settings));
@@ -1221,7 +1207,6 @@ document.addEventListener("mousemove", (e) => {
 });
 document.addEventListener("mouseup", () => { if (pickerDrag) { pickerDrag = false; commitPicker(); } });
 
-function tickClock() { setText("clock", new Date().toTimeString().slice(0, 8)); }
 
 $("btnExport2").onclick = exportCSV;
 function exportCSV() {
@@ -1265,7 +1250,6 @@ document.querySelectorAll(".sheet-wrap").forEach((w) => {
 });
 // 设置已从弹层迁移为独立分区，滚动淡出逻辑随之废弃
 
-$("btnSettings").onclick = () => navigate("settings");
 $("btnPickWallpaper").onclick = () => call("pickWallpaper");
 window.__wallpaperPicked = () => {
   call("set", { key: "wallpaper", value: "custom" }).then((r) => r.settings && applySettings(r.settings));
@@ -1426,7 +1410,6 @@ function applySettings(s) {
   $("setFuseTemp").value = s.fuseTemp;
   $("fuseVal").textContent = s.fuseTemp + " °C";
   $("setPeak").checked = s.showPeak;
-  setText("ivl", s.interval + " ms");
   if (s.accent) {
     document.documentElement.style.setProperty("--accent", s.accent);
     document.documentElement.style.setProperty("--accent-press", shade(s.accent, -26));
@@ -1631,8 +1614,6 @@ async function boot() {
   renderModes();
   redrawAll();
   loadHistory();
-  tickClock();
-  setInterval(tickClock, 1000);
   $("aboutSrc").textContent = "macmon · 内嵌";
 }
 
