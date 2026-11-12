@@ -33,6 +33,7 @@
   --seg-bg:rgba(255,255,255,.06);
   --radius:14px;
   --fs:13px;
+  --fw:400;
   --ease:cubic-bezier(.32,.72,0,1);
 }
 
@@ -73,7 +74,7 @@
 html,body{height:100%}
 body{
   background:transparent;color:var(--text);
-  font-size:var(--fs);line-height:1.45;
+  font-size:var(--fs);font-weight:var(--fw);line-height:1.45;
   font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Helvetica Neue",sans-serif;
   -webkit-font-smoothing:antialiased;
   overflow:hidden;user-select:none;cursor:default;
@@ -410,6 +411,18 @@ body[data-wallpaper="mono"]{background:radial-gradient(120% 80% at 50% -20%,rgba
 .wp-night{background:linear-gradient(135deg,#0A1E3C,#1C1C2E)}
 .wp-mono{background:linear-gradient(135deg,#6E6E73,#2C2C2E)}
 
+/* ---------- 壁纸无极取色 ---------- */
+.wall-pick{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid var(--hair);border-radius:12px;background:var(--inset)}
+.wp-row{display:flex;align-items:center;gap:9px}
+.wp-k{width:34px;flex:none;font-size:10.5px;color:var(--text-2)}
+.wp-row .slider{flex:1;width:auto;min-width:0}
+.wp-v{width:40px;flex:none;text-align:right;font:500 10.5px ui-monospace,SF Mono,Menlo,monospace;color:var(--text-2);font-variant-numeric:tabular-nums}
+.wp-hue{background:linear-gradient(90deg,#FF3B30,#FFD60A,#32D74B,#00C7BE,#0A84FF,#5E5CE6,#FF2D55)}
+.wp-foot{display:flex;align-items:center;gap:8px;margin-top:2px}
+.wp-chip{width:26px;height:26px;flex:none;border-radius:8px;border:1px solid var(--hair-strong);box-shadow:0 1px 4px rgba(0,0,0,.2)}
+.wp-tip{font-size:10px;color:var(--text-3);line-height:1.35;flex:1;min-width:0}
+body.wall-color .wp-tip{color:var(--text-3)}
+
 /* ---------- 模块编辑 ---------- */
 .handle{display:none;position:absolute;left:6px;top:6px;z-index:6;width:22px;height:22px;align-items:center;justify-content:center;color:var(--text-3);cursor:grab;border-radius:6px;font-size:13px;letter-spacing:-1px}
 .handle:hover{background:var(--inset);color:var(--accent)}
@@ -685,27 +698,6 @@ body[data-density="relaxed"] .dashboard{gap:16px}
 
 .nopad-t{padding-top:0}
 
-/* ---------- 总览页 ---------- */
-.ov-hero{
-  padding:14px 16px;border:1px solid var(--hair);border-radius:var(--radius);
-  background:var(--panel);box-shadow:var(--shadow);display:flex;flex-direction:column;gap:3px;
-}
-.ov-hero-t{font-size:16px;font-weight:700;letter-spacing:-.02em}
-.ov-device{font-size:11px;color:var(--text-3);font-family:ui-monospace,SF Mono,Menlo,monospace;margin-top:4px}
-.ov-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:14px}
-.ov-card{
-  display:flex;flex-direction:column;gap:8px;padding:14px 16px;
-  background:var(--panel);border:1px solid var(--hair);border-radius:var(--radius);
-  box-shadow:var(--shadow);cursor:default;min-height:76px;justify-content:center;
-  transition:transform .16s var(--ease),border-color .16s var(--ease),background .16s var(--ease);
-}
-.ov-card:hover{transform:translateY(-2px);border-color:var(--hair-strong);background:var(--panel-hi)}
-.ov-card:active{transform:translateY(0) scale(.995)}
-.ov-card:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.ov-top{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:18px}
-.ov-ico{font-size:13px;color:var(--accent)}
-.ov-name{font-size:13.5px;font-weight:650;letter-spacing:-.01em}
-
 /* ---------- 空态 / 错误态 ---------- */
 .empty{
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
@@ -722,7 +714,6 @@ body[data-density="relaxed"] .dashboard{gap:16px}
 @media (max-width:860px){
   .app{grid-template-columns:200px 1fr}
   .pages{padding:4px 14px 20px}
-  .ov-grid{grid-template-columns:minmax(0,1fr)}
   .sensor-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .hw-grid{grid-template-columns:minmax(0,1fr)}
   .pk-grid{grid-template-columns:repeat(3,minmax(0,1fr))}

@@ -276,6 +276,8 @@ final class Settings {
         static let chartLine = "chartLine"
         static let lang = "lang"
         static let fontSize = "fontSize"
+        static let fontWeight = "fontWeight"
+        static let wallColor = "wallColor"
         static let history = "history"
     }
 
@@ -298,6 +300,22 @@ final class Settings {
     var chartLine: Double { ud.object(forKey: K.chartLine) == nil ? 1.6 : ud.double(forKey: K.chartLine) }
     var lang: String { ud.string(forKey: K.lang) ?? "auto" }
     var fontSize: Int { ud.object(forKey: K.fontSize) == nil ? 13 : ud.integer(forKey: K.fontSize) }
+    // 字体粗细 300~700（步长 10），越界或非法值回落到 400
+    var fontWeight: Int {
+        let v = ud.object(forKey: K.fontWeight) == nil ? 400 : ud.integer(forKey: K.fontWeight)
+        let snapped = Int((Double(v) / 10.0).rounded()) * 10
+        return min(700, max(300, snapped))
+    }
+    // 壁纸无极色，仅接受 #RRGGBB，非法值回落到默认蓝
+    var wallColor: String {
+        let v = (ud.string(forKey: K.wallColor) ?? "").uppercased()
+        return isValidHex(v) ? v : "#2C6BED"
+    }
+    private func isValidHex(_ v: String) -> Bool {
+        guard v.count == 7, v.hasPrefix("#") else { return false }
+        let body = v.dropFirst()
+        return body.allSatisfy { $0.isHexDigit }
+    }
     func setDashboard(_ json: String) { ud.set(json, forKey: K.dashboard) }
     func setGlassAlpha(_ v: Int) { ud.set(v, forKey: K.glassAlpha) }
     var customColors: [String: String] { ud.dictionary(forKey: K.customColors) as? [String: String] ?? [:] }
@@ -317,7 +335,20 @@ final class Settings {
             "density": K.density, "sideWidth": K.sideWidth, "radius": K.radius,
             "chartFill": K.chartFill, "chartLine": K.chartLine,
             "lang": K.lang, "fontSize": K.fontSize,
+            "fontWeight": K.fontWeight, "wallColor": K.wallColor,
         ]
+        // 壁纸色先做校验再落盘，避免把非法字符串写进 UserDefaults
+        if key == "wallColor" {
+            let hex = String(describing: value).uppercased()
+            guard isValidHex(hex) else { return }
+            ud.set(hex, forKey: K.wallColor)
+            return
+        }
+        if key == "fontWeight" {
+            let v = (value as? Int) ?? Int(String(describing: value)) ?? 400
+            ud.set(min(700, max(300, Int((Double(v) / 10.0).rounded()) * 10)), forKey: K.fontWeight)
+            return
+        }
         if let real = map[key] { ud.set(value, forKey: real) }
     }
 
@@ -353,6 +384,7 @@ final class Settings {
         "customColors":\(customColorsJSON),"glassAlpha":\(glassAlpha),\
         "density":"\(density)","sideWidth":\(sideWidth),"radius":\(radius),\
         "chartFill":\(chartFill),"chartLine":\(chartLine),"lang":"\(lang)","fontSize":\(fontSize),\
+        "fontWeight":\(fontWeight),"wallColor":"\(wallColor)",\
         "dashboard":"\(jsonEscape(dashboard))","dark":\(isDark())}
         """
     }
@@ -1266,6 +1298,8 @@ final class MainController: NSViewController, WKScriptMessageHandler {
             Settings.shared.set("chartLine", 1.6)
             Settings.shared.set("lang", "auto")
             Settings.shared.set("fontSize", 13)
+            Settings.shared.set("fontWeight", 400)
+            Settings.shared.set("wallColor", "#2C6BED")
             Metrics.shared.restart()
             notice(id, "{\"ok\":true,\"settings\":\(Settings.shared.json)}")
 

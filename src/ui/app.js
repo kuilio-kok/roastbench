@@ -116,14 +116,9 @@ window.__reply = (id, payload) => {
 /* =========================================================================
    Mac 工具箱 · 模块注册表 + 分区导航框架
    新增功能 = 在 TOOLBOX_MODULES 追加一条定义 + 提供一个 <template id="tpl-xxx">。
-   导航、总览页、页面挂载、状态徽标全部由注册表驱动，无需改动框架代码。
+   导航、页面挂载、状态徽标全部由注册表驱动，无需改动框架代码。
    ========================================================================= */
 const TOOLBOX_MODULES = [
-  {
-    id: "overview", name: "总览", icon: "▦", group: "", order: 0,
-    desc: "工具箱全貌：各模块用途与当前状态，可一键进入任意模块。",
-    badge: null,
-  },
   {
     id: "burn", name: "性能压测", icon: "♨", group: "工具", order: 10,
     desc: "十种压力模式加载 CPU / GPU，记录温度、功耗与风扇曲线，结束后出成绩单。",
@@ -172,11 +167,13 @@ const MODULE_HOOKS = {
   about: () => loadHardware(),
 };
 
-let currentModule = "overview";
+let currentModule = "";
 
 const moduleById = (id) => TOOLBOX_MODULES.find((m) => m.id === id) || null;
 const sortedModules = () => TOOLBOX_MODULES.slice().sort((a, b) => a.order - b.order);
 const navModules = () => sortedModules().filter((m) => m.inNav !== false);
+/* 启动默认分区：注册表中排序最靠前、且在导航里可见的模块（不再硬编码某个 id） */
+const defaultModuleId = () => (navModules()[0] || {}).id || "";
 
 function moduleBadge(m) {
   const b = typeof m.badge === "function" ? m.badge() : m.badge;
@@ -205,42 +202,6 @@ function renderNav() {
   nav.querySelectorAll("[data-nav]").forEach((b) => { b.onclick = () => navigate(b.dataset.nav); });
 }
 
-/* ---------- 总览页 ---------- */
-function overviewCardsHTML() {
-  return navModules().map((m) => `
-    <article class="ov-card" data-go="${m.id}" tabindex="0" role="button" title="${esc(m.desc)}">
-      <div class="ov-top">
-        <span class="ov-ico">${m.icon}</span>
-        ${moduleBadge(m)}
-      </div>
-      <div class="ov-name">${esc(m.name)}</div>
-    </article>`).join("");
-}
-
-function bindOverview(scope) {
-  scope.querySelectorAll("[data-go]").forEach((el) => {
-    const go = () => navigate(el.dataset.go);
-    el.onclick = go;
-    el.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } };
-  });
-}
-
-function fillOverviewDevice() {
-  const el = $("ovDevice");
-  if (!el || !window._info) return;
-  const i = window._info;
-  el.textContent = [i.display_name || i.model_name, i.chip, "macOS " + i.macos]
-    .filter(Boolean).join("  ·  ");
-}
-
-function renderOverview() {
-  const grid = $("ovGrid");
-  if (!grid) return;
-  grid.innerHTML = overviewCardsHTML();
-  bindOverview(grid);
-  fillOverviewDevice();
-}
-
 /* ---------- 页面挂载：每个模块独占一个 .page ---------- */
 function ensurePages() {
   const pages = $("pages");
@@ -249,18 +210,9 @@ function ensurePages() {
     const sec = document.createElement("section");
     sec.className = "page";
     sec.id = "page-" + m.id;
-    if (m.id === "overview") {
-      sec.innerHTML = `
-        <header class="ov-hero">
-          <div class="ov-hero-t">${esc(m.name)}</div>
-          <div class="ov-device" id="ovDevice">正在识别本机…</div>
-        </header>
-        <div class="ov-grid" id="ovGrid"></div>`;
-    } else {
-      const tpl = document.getElementById("tpl-" + m.id);
-      if (tpl) sec.appendChild(tpl.content.cloneNode(true));
-      else sec.innerHTML = `<div class="empty"><b>模块视图缺失</b><span>未找到 template#tpl-${esc(m.id)}</span></div>`;
-    }
+    const tpl = document.getElementById("tpl-" + m.id);
+    if (tpl) sec.appendChild(tpl.content.cloneNode(true));
+    else sec.innerHTML = `<div class="empty"><b>模块视图缺失</b><span>未找到 template#tpl-${esc(m.id)}</span></div>`;
     pages.appendChild(sec);
   });
 }
@@ -282,14 +234,13 @@ function navigate(id) {
   if (pages) pages.scrollTop = 0;
   const cr = $("compactRun");
   if (cr) cr.hidden = !document.body.classList.contains("compact");
-  if (id === "overview") renderOverview();
   const hook = MODULE_HOOKS[id];
   if (hook) { try { hook(); } catch (err) { toast("模块加载失败：" + (err && err.message ? err.message : err), true); } }
   refreshBadges();
   setTimeout(redrawAll, 40);
 }
 
-/* 状态徽标随数据变化刷新（导航 + 总览）；节流，避免每次采样都改 DOM */
+/* 状态徽标随数据变化刷新（导航）；节流，避免每次采样都改 DOM */
 let lastBadgeAt = 0;
 function refreshBadges(force) {
   const now = Date.now();
@@ -298,11 +249,6 @@ function refreshBadges(force) {
   sortedModules().forEach((m) => {
     const slot = document.querySelector(`.ni-badge[data-badge="${m.id}"]`);
     if (slot) slot.innerHTML = moduleBadge(m);
-    const card = document.querySelector(`#ovGrid [data-go="${m.id}"]`);
-    if (card) {
-      const top = card.querySelector(".ov-top");
-      if (top) top.innerHTML = `<span class="ov-ico">${m.icon}</span>${moduleBadge(m)}`;
-    }
   });
 }
 
@@ -312,10 +258,10 @@ function initToolbox() {
   const brand = document.querySelector(".wordmark");
   if (brand) {
     brand.style.cursor = "default";
-    brand.onclick = () => navigate("overview");
-    brand.title = "回到总览";
+    brand.onclick = () => navigate(defaultModuleId());
+    brand.title = "回到" + ((moduleById(defaultModuleId()) || {}).name || "首页");
   }
-  navigate("overview");
+  navigate(defaultModuleId());
 }
 
 /* 页面结构在脚本一开始就挂载好，后续所有顶层 DOM 绑定才拿得到元素 */
@@ -362,6 +308,7 @@ const WALLPAPERS = [
   { id: "sunset", name: "落日" },
   { id: "night", name: "夜航" },
   { id: "mono", name: "素灰" },
+  { id: "color", name: "无极取色" },
   { id: "custom", name: "我的图片" },
 ];
 function hexA(hex, a) {
@@ -393,6 +340,8 @@ function refreshColors() {
 }
 window.__theme = (dark) => {
   document.documentElement.dataset.theme = dark ? "dark" : "light";
+  // 无极色壁纸的正文色跟随主题，主题切换时必须重新推导
+  if (document.body.dataset.wallpaper === "color" && settings) applyWallColor(settings.wallColor || WALL_DEFAULT, false);
   refreshColors();
   redrawAll();
 };
@@ -800,7 +749,6 @@ function renderInfo(i) {
   $("setThreads").max = String(i.ncpu || 16);
   renderModes();
   window._info = i;
-  fillOverviewDevice();
   refreshBadges(true);
 }
 
@@ -1393,6 +1341,168 @@ $("btnDiagYes").onclick = () => {
   });
 };
 
+/* ---------- 壁纸无极色：任意 HEX + 自动氛围渐变 + 自动对比度守护 ---------- */
+const WALL_DEFAULT = "#2C6BED";
+const WALL_TOKENS = ["--text", "--text-2", "--text-3", "--hair", "--hair-strong", "--side-bg", "--panel", "--panel-hi", "--inset", "--grid", "--tooltip", "--glass-solid", "--btn-face", "--btn-border", "--seg-bg", "--shadow"];
+
+const wallRgb = (hex) => {
+  let n = String(hex || WALL_DEFAULT).replace("#", "").trim();
+  if (n.length === 3) n = n.split("").map((c) => c + c).join("");
+  if (!/^[0-9A-Fa-f]{6}$/.test(n)) n = WALL_DEFAULT.replace("#", "");
+  return [parseInt(n.substr(0, 2), 16), parseInt(n.substr(2, 2), 16), parseInt(n.substr(4, 2), 16)];
+};
+const wallHex = (arr) => "#" + arr.map((c) => Math.max(0, Math.min(255, Math.round(c))).toString(16).padStart(2, "0")).join("").toUpperCase();
+const wallLum = (rgb) => {
+  const f = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+  return 0.2126 * f(rgb[0]) + 0.7152 * f(rgb[1]) + 0.0722 * f(rgb[2]);
+};
+const wallContrast = (a, b) => {
+  const x = wallLum(a), y = wallLum(b);
+  return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+};
+const wallMix = (a, b, t) => a.map((c, i) => c + (b[i] - c) * t);
+
+/* 依据任意底色推导整套界面 token：极浅 / 极深底都保证正文、次要文字、边框可读。
+   1) 正文字色优先跟随当前主题（深色主题浅字 / 浅色主题深字）；
+   2) 底色与字色冲突时，先沿同色相把底色压暗或提亮（上限 55%）直到对比度 ≥ 4.8；
+   3) 仍不达标（如深色主题选近白底这类极端冲突）才反转字色，保证用户选中的颜色不被抹掉。 */
+function wallPalette(bgIn, preferDark) {
+  const INK = [16, 16, 18], PAPER = [245, 245, 247];
+  const TARGET = 4.8;
+  const pushToward = (bg, ink, maxT) => {
+    const toward = ink === PAPER ? [0, 0, 0] : [255, 255, 255];
+    let t = 0, out = bg;
+    while (wallContrast(out, ink) < TARGET && t < maxT) {
+      t = Math.min(maxT, t + 0.06);
+      out = wallMix(bg, toward, t);
+    }
+    return out;
+  };
+  let ink = preferDark ? PAPER : INK;
+  let bg = pushToward(bgIn, ink, 0.55);
+  let followedTheme = wallContrast(bg, ink) >= TARGET;
+  if (!followedTheme) {
+    ink = ink === PAPER ? INK : PAPER;
+    bg = pushToward(bgIn, ink, 0.9);
+  }
+  const dark = ink === PAPER;
+  const on = (a) => (dark ? `rgba(255,255,255,${a})` : `rgba(18,18,22,${a})`);
+  return {
+    bg,
+    dark,
+    followedTheme,
+    tokens: dark
+      ? {
+          "--text": "#F5F5F7",
+          "--text-2": "rgba(236,236,242,.72)",
+          "--text-3": "rgba(236,236,242,.5)",
+          "--hair": on(0.13),
+          "--hair-strong": on(0.21),
+          "--side-bg": "rgba(0,0,0,.26)",
+          "--panel": on(0.08),
+          "--panel-hi": on(0.11),
+          "--inset": "rgba(0,0,0,.2)",
+          "--grid": on(0.09),
+          "--tooltip": "rgba(24,24,26,.94)",
+          "--glass-solid": "#1E1E22",
+          "--btn-face": "linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,.07))",
+          "--btn-border": on(0.17),
+          "--seg-bg": on(0.11),
+          "--shadow": "0 1px 2px rgba(0,0,0,.26),0 6px 20px rgba(0,0,0,.22)",
+        }
+      : {
+          "--text": "#131316",
+          "--text-2": "rgba(20,20,26,.68)",
+          "--text-3": "rgba(20,20,26,.52)",
+          "--hair": on(0.13),
+          "--hair-strong": on(0.2),
+          "--side-bg": "rgba(255,255,255,.38)",
+          "--panel": "rgba(255,255,255,.7)",
+          "--panel-hi": "rgba(255,255,255,.88)",
+          "--inset": on(0.05),
+          "--grid": on(0.1),
+          "--tooltip": "rgba(255,255,255,.96)",
+          "--glass-solid": "#ffffff",
+          "--btn-face": "linear-gradient(180deg,#fff,#F1F1F4)",
+          "--btn-border": on(0.14),
+          "--seg-bg": on(0.07),
+          "--shadow": "0 1px 2px rgba(0,0,0,.06),0 4px 14px rgba(0,0,0,.08)",
+        },
+  };
+}
+
+/* 应用壁纸色：底色 + 同色系氛围渐变；persist=true 时写回设置 */
+function applyWallColor(hex, persist) {
+  const pal = wallPalette(wallRgb(hex), document.documentElement.dataset.theme === "dark");
+  const base = wallHex(pal.bg);
+  const root = document.documentElement.style;
+  WALL_TOKENS.forEach((k) => root.setProperty(k, pal.tokens[k]));
+  const rgb = pal.bg.map((c) => Math.round(c)).join(",");
+  document.body.classList.add("wall-color");
+  document.body.style.backgroundColor = base;
+  document.body.style.backgroundImage =
+    `radial-gradient(120% 80% at 15% -10%,rgba(255,255,255,${pal.dark ? 0.14 : 0.52}),transparent 62%),` +
+    `radial-gradient(100% 70% at 100% 0%,rgba(255,255,255,${pal.dark ? 0.08 : 0.34}),transparent 55%),` +
+    `radial-gradient(90% 90% at 50% 115%,rgba(0,0,0,${pal.dark ? 0.34 : 0.1}),transparent 60%),` +
+    `linear-gradient(160deg,rgb(${rgb}),rgb(${rgb}))`;
+  document.body.style.backgroundSize = "auto";
+  document.body.style.backgroundPosition = "0 0";
+  document.body.dataset.wallpaper = "color";
+  syncWallControls(hex, pal);
+  if (persist && settings) {
+    settings.wallpaper = "color";
+    settings.wallColor = hex.toUpperCase();
+  }
+  refreshColors();
+  redrawAll();
+}
+
+/* 退出无极色：撤掉内联样式与 token 覆盖，回到主题默认 */
+function clearWallColor() {
+  const root = document.documentElement.style;
+  WALL_TOKENS.forEach((k) => root.removeProperty(k));
+  document.body.classList.remove("wall-color");
+  document.body.style.backgroundColor = "";
+  document.body.style.backgroundImage = "";
+  document.body.style.backgroundSize = "";
+  document.body.style.backgroundPosition = "";
+}
+
+/* 取色控件与当前颜色同步（色相 / 浓淡 / 明暗 三段滑杆） */
+function syncWallControls(hex, pal) {
+  const [h, s, v] = hexToHsv(hex);
+  if ($("wallHue")) {
+    $("wallHue").value = Math.round(h);
+    $("wallSat").value = Math.round(s);
+    $("wallVal").value = Math.round(v);
+    $("wallHueVal").textContent = Math.round(h) + "°";
+    $("wallSatVal").textContent = Math.round(s) + "%";
+    $("wallValVal").textContent = Math.round(v) + "%";
+    const c = String(hex).toUpperCase();
+    $("wallHex").textContent = c;
+    $("wallChip").style.background = c;
+    const p2 = pal || wallPalette(wallRgb(hex), document.documentElement.dataset.theme === "dark");
+    $("wallTip").textContent = p2.followedTheme
+      ? (p2.dark ? "底色与深色主题一致，正文自动取浅色并已按对比度微调底色明度" : "底色与浅色主题一致，正文自动取深色并已按对比度微调底色明度")
+      : (p2.dark ? "当前底色与主题冲突，已按对比度自动换成浅色正文，保住你选的底色" : "当前底色与主题冲突，已按对比度自动换成深色正文，保住你选的底色");
+  }
+  const chip = document.querySelector('#wallSwatches .swc[data-c="color"]');
+  if (chip) chip.style.background = String(hex).toUpperCase();
+}
+
+const wallPickAndApply = () => {
+  const h = Number($("wallHue").value), s = Number($("wallSat").value), v = Number($("wallVal").value);
+  applyWallColor(hsvToHex(h, s, v), false);
+};
+["wallHue", "wallSat", "wallVal"].forEach((id) => {
+  if (!$("" + id)) return;
+  $(id).oninput = wallPickAndApply;
+  $(id).onchange = () => {
+    const hex = hsvToHex(Number($("wallHue").value), Number($("wallSat").value), Number($("wallVal").value));
+    call("set", { key: "wallColor", value: hex.toUpperCase() }).then((r) => r.settings && applySettings(r.settings));
+  };
+});
+
 /* ---------- 设置 ---------- */
 function applySettings(s) {
   settings = s;
@@ -1419,10 +1529,17 @@ function applySettings(s) {
   }
   document.body.dataset.wallpaper = s.wallpaper || "none";
   if (s.wallpaper === "custom") {
+    clearWallColor();
     document.body.style.backgroundImage = 'url("roast://wallpaper?v=' + Date.now() + '")';
     document.body.style.backgroundSize = "cover";
     document.body.style.backgroundPosition = "center";
+  } else if (s.wallpaper === "color") {
+    document.body.style.backgroundImage = "";
+    document.body.style.backgroundSize = "";
+    document.body.style.backgroundPosition = "";
+    applyWallColor(s.wallColor || WALL_DEFAULT, false);
   } else {
+    clearWallColor();
     document.body.style.backgroundImage = "";
     document.body.style.backgroundSize = "";
     document.body.style.backgroundPosition = "";
@@ -1438,6 +1555,12 @@ function applySettings(s) {
     document.documentElement.style.setProperty("--fs", s.fontSize + "px");
     $("fontSlider").value = s.fontSize;
     $("fontVal").textContent = s.fontSize + " px";
+  }
+  if (s.fontWeight != null) {
+    const fw = Math.max(300, Math.min(700, Number(s.fontWeight) || 400));
+    document.documentElement.style.setProperty("--fw", fw);
+    $("fontWSlider").value = fw;
+    $("fontWVal").textContent = String(fw);
   }
   document.body.dataset.density = s.density || "standard";
   if ($("setFill")) $("setFill").checked = s.chartFill !== false;
@@ -1466,14 +1589,20 @@ function renderSwatches() {
     el.onclick = () => call("set", { key: "chartTheme", value: el.dataset.c }).then((r) => r.settings && applySettings(r.settings));
   });
   const wp = settings ? (settings.wallpaper || "none") : "none";
-  $("wallSwatches").innerHTML = WALLPAPERS.map((w) =>
-    `<span class="swc ${w.id === wp ? "on" : ""} ${w.id !== "none" ? "wp-" + w.id : ""}" data-c="${w.id}" title="${w.name}"></span>`).join("");
+  const wallCur = (settings && settings.wallColor) || WALL_DEFAULT;
+  $("wallSwatches").innerHTML = WALLPAPERS.map((w) => {
+    const cls = w.id === "color" ? "" : (w.id !== "none" ? "wp-" + w.id : "");
+    const style = w.id === "color" ? ` style="background:${wallCur}"` : "";
+    return `<span class="swc ${w.id === wp ? "on" : ""} ${cls}" data-c="${w.id}" title="${w.name}"${style}></span>`;
+  }).join("");
   document.querySelectorAll("#wallSwatches .swc").forEach((el) => {
     el.onclick = () => {
       if (el.dataset.c === "custom") { call("pickWallpaper"); return; }
+      if (el.dataset.c === "color") { applyWallColor(wallCur, false); call("set", { key: "wallColor", value: String(wallCur).toUpperCase() }).then((r) => r.settings && applySettings(r.settings)); return; }
       call("set", { key: "wallpaper", value: el.dataset.c }).then((r) => r.settings && applySettings(r.settings));
     };
   });
+  syncWallControls(wallCur);
   $("accentCustom").value = /^#[0-9A-Fa-f]{6}$/.test(acc) ? acc : "#0A84FF";
   $("hueVal").textContent = $("accentCustom").value.toUpperCase();
 }
@@ -1817,6 +1946,17 @@ $("fontSlider").oninput = (e) => {
 $("fontSlider").onchange = (e) => {
   const v = Number(e.target.value);
   call("set", { key: "fontSize", value: v }).then((r) => r.settings && applySettings(r.settings));
+};
+
+// 字体粗细：300~700 连续可调（步长 10），拖动实时预览，松手落盘
+$("fontWSlider").oninput = (e) => {
+  const v = Math.round(Number(e.target.value) / 10) * 10;
+  $("fontWVal").textContent = String(v);
+  document.documentElement.style.setProperty("--fw", v);
+};
+$("fontWSlider").onchange = (e) => {
+  const v = Math.round(Number(e.target.value) / 10) * 10;
+  call("set", { key: "fontWeight", value: v }).then((r) => r.settings && applySettings(r.settings));
 };
 
 document.addEventListener("keydown", (e) => {

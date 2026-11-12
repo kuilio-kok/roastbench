@@ -302,8 +302,30 @@
           </div>
         </div>
         <div class="row col">
-          <div class="row-label">壁纸<span class="row-sub">背景氛围，或用自己的图片</span></div>
+          <div class="row-label">壁纸<span class="row-sub">预设氛围、任意颜色，或用自己的图片</span></div>
           <div class="swatches wall" id="wallSwatches"></div>
+          <div class="wall-pick" id="wallPick">
+            <div class="wp-row">
+              <span class="wp-k">色相</span>
+              <input type="range" class="slider wp-hue" id="wallHue" min="0" max="360" step="1">
+              <b class="wp-v" id="wallHueVal">210°</b>
+            </div>
+            <div class="wp-row">
+              <span class="wp-k">浓淡</span>
+              <input type="range" class="slider" id="wallSat" min="0" max="100" step="1">
+              <b class="wp-v" id="wallSatVal">60%</b>
+            </div>
+            <div class="wp-row">
+              <span class="wp-k">明暗</span>
+              <input type="range" class="slider" id="wallVal" min="0" max="100" step="1">
+              <b class="wp-v" id="wallValVal">60%</b>
+            </div>
+            <div class="wp-foot">
+              <span class="wp-chip" id="wallChip"></span>
+              <span class="hue-val" id="wallHex">#2C6BED</span>
+              <span class="wp-tip" id="wallTip">拖动即可取到任意颜色，底色与文字对比度自动适配</span>
+            </div>
+          </div>
           <button class="btn ghost tiny" id="btnPickWallpaper">选择自己的图片…</button>
         </div>
         <div class="row">
@@ -313,6 +335,10 @@
         <div class="row">
           <div class="row-label">字体大小<span class="row-sub" id="fontVal">13 px</span></div>
           <input type="range" class="slider" id="fontSlider" min="11" max="18" step="1">
+        </div>
+        <div class="row">
+          <div class="row-label">字体粗细<span class="row-sub" id="fontWVal">400</span></div>
+          <input type="range" class="slider" id="fontWSlider" min="300" max="700" step="10">
         </div>
         <div class="row">
           <div class="row-label">界面密度<span class="row-sub">字号与间距</span></div>
