@@ -265,6 +265,121 @@
   </section>
 </template>
 
+<!-- 内存清理 -->
+<template id="tpl-memclean">
+  <section class="card">
+    <div class="card-hd">
+      <div><div class="card-t">内存概况</div><div class="card-sub" id="memSub">正在读取…</div></div>
+      <button class="btn ghost tiny" id="btnMemRefresh">刷新</button>
+    </div>
+    <div class="card-bd">
+      <div class="mem-tiles" id="memTiles"></div>
+      <div class="mem-bar"><i id="memBar" style="width:0%"></i></div>
+      <div class="mem-note">数据来自系统内存统计。macOS 会动态调整内存占用，界面显示的释放量仅供参考。</div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-hd"><div><div class="card-t">清理程度</div><div class="card-sub">选一档，再点「开始清理」</div></div></div>
+    <div class="card-bd">
+      <div class="mem-modes" id="memModes">
+        <label class="mem-mode sel" data-mode="light">
+          <input type="radio" name="memModeRd" value="light" checked>
+          <div class="mm-body">
+            <div class="mm-t">轻度模式<span class="mm-tag ok">不关程序</span></div>
+            <div class="mm-d">只做无害操作：归还本 App 可回收内存、清空自身缓存。不关闭任何程序，不需要管理员权限。</div>
+          </div>
+        </label>
+        <label class="mem-mode" data-mode="pick">
+          <input type="radio" name="memModeRd" value="pick">
+          <div class="mm-body">
+            <div class="mm-t">自选关闭程序<span class="mm-tag warn">自己勾选</span></div>
+            <div class="mm-d">列出当前运行的用户 App，勾选要关闭的（默认全不勾），确认后才执行优雅退出。</div>
+          </div>
+        </label>
+        <label class="mem-mode" data-mode="all">
+          <input type="radio" name="memModeRd" value="all">
+          <div class="mm-body">
+            <div class="mm-t">全部关闭<span class="mm-tag danger">二次确认</span></div>
+            <div class="mm-d">关闭所有用户级 App，执行前弹确认框并列出完整名单。系统进程、Finder、Dock 与本 App 永不关闭。</div>
+          </div>
+        </label>
+      </div>
+
+      <div class="mem-pick" id="memPick" hidden>
+        <div class="mp-head">
+          <span id="memPickCount">运行中的用户 App：0 个</span>
+          <span class="mp-actions">
+            <button class="btn ghost tiny" id="btnMemPickAll">全选</button>
+            <button class="btn ghost tiny" id="btnMemPickNone">全不选</button>
+            <button class="btn ghost tiny" id="btnMemPickReload">刷新列表</button>
+          </span>
+        </div>
+        <div class="mp-list" id="memAppList"><div class="mp-empty">正在读取运行中的 App…</div></div>
+      </div>
+
+      <div class="mem-confirm" id="memConfirm" hidden>
+        <div class="mc-t" id="memConfirmTitle">确认关闭这些程序？</div>
+        <div class="mc-d" id="memConfirmDesc"></div>
+        <div class="mc-list" id="memConfirmList"></div>
+        <div class="mc-btns">
+          <button class="btn ghost tiny" id="btnMemCancel">取消</button>
+          <button class="btn primary tiny" id="btnMemConfirm">确认执行</button>
+        </div>
+      </div>
+
+      <div class="mem-actions">
+        <button class="btn primary" id="btnMemStart">开始清理</button>
+        <span class="mem-hint" id="memHint">轻度模式：不会关闭任何程序</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" id="memResultCard" hidden>
+    <div class="card-hd"><div><div class="card-t">清理结果</div><div class="card-sub" id="memResSub">—</div></div></div>
+    <div class="card-bd" id="memResult"></div>
+  </section>
+</template>
+
+<!-- 磁盘垃圾清理 -->
+<template id="tpl-diskclean">
+  <section class="card">
+    <div class="card-hd">
+      <div><div class="card-t">磁盘垃圾扫描</div><div class="card-sub" id="diskSub">尚未扫描 · 扫描全程只读，不改动任何文件</div></div>
+      <button class="btn ghost tiny" id="btnDiskScan">开始扫描</button>
+    </div>
+    <div class="card-bd">
+      <div class="disk-prog" id="diskProg" hidden>
+        <div class="dp-bar"><i id="diskProgBar" style="width:0%"></i></div>
+        <div class="dp-txt" id="diskProgTxt">准备中…</div>
+      </div>
+      <div class="disk-sum" id="diskSum">点「开始扫描」统计各类垃圾的体积；扫描不会修改、删除任何文件。</div>
+      <div class="disk-cats" id="diskCats"></div>
+      <div class="disk-actions">
+        <button class="btn primary" id="btnDiskClean" disabled>清理选中项</button>
+        <span class="disk-hint" id="diskHint">删除一律移入废纸篓，可随时恢复</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" id="diskConfirmCard" hidden>
+    <div class="card-bd">
+      <div class="mc-t">确认清理？</div>
+      <div class="mc-d" id="diskConfirmDesc"></div>
+      <div class="mc-list" id="diskConfirmList"></div>
+      <div class="mc-btns">
+        <button class="btn ghost tiny" id="btnDiskCancel">取消</button>
+        <button class="btn primary tiny" id="btnDiskConfirm">确认清理</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" id="diskResultCard" hidden>
+    <div class="card-hd"><div><div class="card-t">清理结果</div><div class="card-sub" id="diskResSub">—</div></div></div>
+    <div class="card-bd" id="diskResult"></div>
+  </section>
+</template>
+
 <!-- 设置 -->
 <template id="tpl-settings">
   <div class="grid-2">

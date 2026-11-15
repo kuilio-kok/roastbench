@@ -1213,6 +1213,7 @@ final class MainController: NSViewController, WKScriptMessageHandler {
         items.forEach { eval($0) }
     }
 
+
     // MARK: 消息桥
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
         guard let body = message.body as? [String: Any], let op = body["op"] as? String else { return }
@@ -1461,6 +1462,49 @@ final class MainController: NSViewController, WKScriptMessageHandler {
                 notice(id, "{\"ok\":true}")
             } catch {
                 notice(id, "{\"ok\":false}")
+            }
+
+        // MARK: 内存清理
+        case "memStats":
+            notice(id, MemStats.json())
+
+        case "memCleanLight":
+            DispatchQueue.global(qos: .userInitiated).async {
+                let r = MemCleaner.light()
+                DispatchQueue.main.async { self.notice(id, r) }
+            }
+
+        case "memApps":
+            DispatchQueue.global(qos: .userInitiated).async {
+                let r = AppList.json()
+                DispatchQueue.main.async { self.notice(id, r) }
+            }
+
+        case "memQuitApps":
+            let rawPids = (body["pids"] as? [Int]) ?? []
+            let pids = rawPids.map { Int32($0) }
+            DispatchQueue.global(qos: .userInitiated).async {
+                let r = AppList.quit(pids: pids)
+                DispatchQueue.main.async { self.notice(id, r) }
+            }
+
+        // MARK: 磁盘垃圾清理（扫描只读、异步、带进度）
+        case "diskScan":
+            DispatchQueue.global(qos: .utility).async {
+                let r = DiskScanner.scan(progress: { pct, text in
+                    DispatchQueue.main.async {
+                        let p = String(format: "%.1f", pct)
+                        self.eval("window.__diskProgress && window.__diskProgress(\(p),\"\(jsonEscape(text))\")")
+                    }
+                })
+                DispatchQueue.main.async { self.notice(id, r) }
+            }
+
+        case "diskTrash":
+            let paths = (body["paths"] as? [String]) ?? []
+            DispatchQueue.global(qos: .userInitiated).async {
+                let r = DiskScanner.trash(paths: paths)
+                DispatchQueue.main.async { self.notice(id, r) }
             }
 
         default:

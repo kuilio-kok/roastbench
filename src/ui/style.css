@@ -736,3 +736,122 @@ body[data-density="relaxed"] .dashboard{gap:16px}
   #page-burn .grid-2,
   #page-settings .grid-2{columns:1}
 }
+
+/* =========================================================================
+   v3.2 新增：内存清理 / 磁盘垃圾清理
+   ========================================================================= */
+/* ---------- 内存概况 ---------- */
+.mem-tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
+.mem-tile{background:var(--inset);border:1px solid var(--hair);border-radius:12px;padding:12px 14px}
+.mt-k{font-size:11.5px;color:var(--text-2)}
+.mt-v{font-size:20px;font-weight:600;margin:4px 0 2px;letter-spacing:-.2px}
+.mt-v.ok{color:#32D74B}.mt-v.warn{color:#FF9F0A}.mt-v.danger{color:#FF453A}
+.mt-s{font-size:11px;color:var(--text-3)}
+.mem-bar{height:6px;border-radius:3px;background:var(--inset);overflow:hidden}
+.mem-bar i{display:block;height:100%;border-radius:3px;background:linear-gradient(90deg,#0A84FF,#64D2FF);transition:width .5s var(--ease)}
+.mem-note{font-size:11.5px;color:var(--text-3);margin-top:10px;line-height:1.55}
+
+/* ---------- 清理程度 ---------- */
+.mem-modes{display:flex;flex-direction:column;gap:8px}
+.mem-mode{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border:1px solid var(--hair);border-radius:12px;background:var(--panel);cursor:pointer;transition:border-color .18s var(--ease),background .18s var(--ease)}
+.mem-mode:hover{background:var(--panel-hi)}
+.mem-mode.sel{border-color:var(--accent);background:rgba(10,132,255,.10)}
+.mem-mode input{margin-top:2px;accent-color:var(--accent)}
+.mm-t{font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px}
+.mm-d{font-size:11.5px;color:var(--text-2);margin-top:4px;line-height:1.55}
+.mm-tag{font-size:10.5px;font-weight:500;padding:1px 7px;border-radius:6px;border:1px solid transparent}
+.mm-tag.ok{color:#32D74B;border-color:rgba(50,215,75,.35);background:rgba(50,215,75,.10)}
+.mm-tag.warn{color:#FF9F0A;border-color:rgba(255,159,10,.35);background:rgba(255,159,10,.10)}
+.mm-tag.danger{color:#FF453A;border-color:rgba(255,69,58,.35);background:rgba(255,69,58,.10)}
+
+/* ---------- 自选程序列表 ---------- */
+.mem-pick{margin-top:12px;border:1px solid var(--hair);border-radius:12px;overflow:hidden;background:var(--panel)}
+.mp-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 12px;border-bottom:1px solid var(--hair);font-size:11.5px;color:var(--text-2)}
+.mp-actions{display:flex;gap:6px}
+.mp-list{max-height:320px;overflow:auto}
+.mp-row{display:flex;align-items:center;gap:10px;padding:7px 12px;border-bottom:1px solid var(--hair);cursor:pointer}
+.mp-row:last-child{border-bottom:none}
+.mp-row:hover{background:var(--panel-hi)}
+.mp-row input{accent-color:var(--accent)}
+.mp-ico{width:20px;height:20px;border-radius:5px;object-fit:contain;flex:0 0 auto}
+.mp-ico.ph{display:inline-block;background:var(--inset);border:1px solid var(--hair)}
+.mp-name{flex:1;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mp-mem{font-size:12px;color:var(--text-2);font-variant-numeric:tabular-nums}
+.mp-pid{font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums;min-width:74px;text-align:right}
+.mp-empty{padding:16px 12px;font-size:12px;color:var(--text-3);text-align:center}
+
+/* ---------- 确认框 ---------- */
+.mem-confirm{margin-top:12px;border:1px solid rgba(255,159,10,.4);background:rgba(255,159,10,.08);border-radius:12px;padding:12px 14px}
+.mc-t{font-size:13px;font-weight:600}
+.mc-d{font-size:11.5px;color:var(--text-2);margin-top:6px;line-height:1.6}
+.mc-list{margin-top:10px;max-height:200px;overflow:auto;border:1px solid var(--hair);border-radius:10px;background:rgba(0,0,0,.12)}
+.mc-item{display:flex;justify-content:space-between;gap:10px;padding:6px 10px;font-size:11.5px;border-bottom:1px solid var(--hair)}
+.mc-item:last-child{border-bottom:none}
+.mc-dim{color:var(--text-3);font-variant-numeric:tabular-nums}
+.mc-more{padding:6px 10px;font-size:11px;color:var(--text-3)}
+.ci-path{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left}
+.mc-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+.mem-actions{display:flex;align-items:center;gap:12px;margin-top:14px}
+.mem-hint{font-size:11.5px;color:var(--text-3)}
+
+/* ---------- 结果 ---------- */
+.mem-res-top{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:6px}
+.mem-res-big{background:var(--inset);border:1px solid var(--hair);border-radius:12px;padding:12px 14px}
+.mrb-v{font-size:19px;font-weight:600;letter-spacing:-.2px}
+.mrb-k{font-size:11px;color:var(--text-3);margin-top:3px}
+.mem-sec-t{font-size:12px;font-weight:600;color:var(--text-2);margin:14px 0 8px}
+.mem-steps{display:flex;flex-direction:column;gap:6px}
+.mem-step{display:flex;align-items:center;gap:10px;padding:7px 11px;border:1px solid var(--hair);border-radius:10px;background:var(--panel);font-size:11.5px}
+.st-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.st-d{color:var(--text-3);font-size:11px;max-width:46%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.st-tag{font-size:10.5px;padding:1px 7px;border-radius:6px;border:1px solid transparent;flex:0 0 auto}
+.st-tag.ok{color:#32D74B;border-color:rgba(50,215,75,.35);background:rgba(50,215,75,.10)}
+.st-tag.warn{color:#FF9F0A;border-color:rgba(255,159,10,.35);background:rgba(255,159,10,.10)}
+.st-tag.danger{color:#FF453A;border-color:rgba(255,69,58,.35);background:rgba(255,69,58,.10)}
+
+/* ---------- 磁盘扫描 ---------- */
+.disk-prog{margin-bottom:12px}
+.dp-bar{height:6px;border-radius:3px;background:var(--inset);overflow:hidden}
+.dp-bar i{display:block;height:100%;background:linear-gradient(90deg,#0A84FF,#64D2FF);transition:width .3s linear}
+.dp-txt{font-size:11px;color:var(--text-3);margin-top:6px}
+.disk-sum{font-size:12px;color:var(--text-2);line-height:1.6;margin-bottom:12px}
+.disk-sum b{color:var(--text);font-variant-numeric:tabular-nums}
+.dc-scanned{display:inline-block;margin-left:10px;font-size:11px;color:var(--text-3)}
+.dc-group{margin-bottom:16px;border:1px solid var(--hair);border-radius:12px;overflow:hidden}
+.dc-group-hd{display:flex;align-items:center;gap:10px;padding:9px 12px;background:rgba(255,255,255,.03);border-bottom:1px solid var(--hair)}
+.dc-group-tip{font-size:11px;color:var(--text-3)}
+.dc-badge{font-size:10.5px;padding:1px 8px;border-radius:6px;border:1px solid transparent;flex:0 0 auto}
+.dc-badge.safe{color:#32D74B;border-color:rgba(50,215,75,.35);background:rgba(50,215,75,.10)}
+.dc-badge.careful{color:#FF9F0A;border-color:rgba(255,159,10,.35);background:rgba(255,159,10,.10)}
+.dc-badge.confirm{color:#FF453A;border-color:rgba(255,69,58,.35);background:rgba(255,69,58,.10)}
+.dc-empty{padding:14px 12px;font-size:11.5px;color:var(--text-3)}
+.dc-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--hair)}
+.dc-main{display:flex;align-items:center;gap:10px;flex:1;cursor:pointer;min-width:0}
+.dc-main input{accent-color:var(--accent);flex:0 0 auto}
+.dc-body{flex:1;min-width:0}
+.dc-t{font-size:12.5px;font-weight:500;display:flex;align-items:center;gap:8px}
+.dc-part{font-size:10px;color:#FF9F0A}
+.dc-d{font-size:11px;color:var(--text-3);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dc-num{display:flex;flex-direction:column;align-items:flex-end;min-width:96px}
+.dc-num b{font-size:12.5px;font-variant-numeric:tabular-nums}
+.dc-num span{font-size:10.5px;color:var(--text-3);font-variant-numeric:tabular-nums}
+.dc-more{flex:0 0 auto}
+.dc-items{border-bottom:1px solid var(--hair);max-height:300px;overflow:auto;background:rgba(0,0,0,.10)}
+.dci-row{display:flex;align-items:center;gap:10px;padding:6px 12px 6px 34px;font-size:11px;border-bottom:1px solid var(--hair);cursor:pointer}
+.dci-row:last-child{border-bottom:none}
+.dci-row:hover{background:var(--panel-hi)}
+.dci-row input{accent-color:var(--accent);flex:0 0 auto}
+.dci-name{max-width:34%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:6px}
+.dci-tag{font-size:9.5px;padding:0 5px;border-radius:4px;border:1px solid var(--hair-strong);color:var(--text-3)}
+.dci-size{min-width:74px;color:var(--text-2);font-variant-numeric:tabular-nums}
+.dci-time{min-width:112px;color:var(--text-3);font-variant-numeric:tabular-nums}
+.dci-path{flex:1;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left}
+.dci-more{padding:7px 12px;font-size:10.5px;color:var(--text-3)}
+.disk-actions{display:flex;align-items:center;gap:12px;margin-top:6px}
+.disk-hint{font-size:11.5px;color:var(--text-3)}
+
+/* 窄窗口自适应 */
+@media (max-width:1080px){
+  .mem-tiles{grid-template-columns:repeat(2,1fr)}
+  .mem-res-top{grid-template-columns:1fr}
+}

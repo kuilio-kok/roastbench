@@ -93,6 +93,7 @@ let charts = [];
 let intervalMs = 250, windowSec = 60, cap = 240;
 let lastTickAt = 0, rafId = null, timerId = null;
 let C = {};
+var layoutEarly = null;   // 提前到达的 dashboard 布局（避免 let 暂时性死区报错）
 const SMOOTH_KEYS = ["ct", "gt", "cw", "gw", "aw", "sw", "fan", "pf", "ef", "gf", "cu", "gu", "mu", "ru", "su", "dr", "dw"];
 
 const $ = (id) => document.getElementById(id);
@@ -153,6 +154,27 @@ const TOOLBOX_MODULES = [
     badge: null,
   },
   {
+    id: "memclean", name: "内存清理", icon: "◑", group: "清理", order: 70,
+    desc: "查看内存概况，按轻度 / 自选 / 全部三档回收内存，全程不申请管理员权限。",
+    badge: () => {
+      let m = null;
+      try { m = memSnap; } catch (e) { m = null; }
+      if (!m) return { text: "未读取", tone: "idle" };
+      const tone = m.pressure === "紧张" ? "bad" : (m.pressure === "偏高" ? "warn" : "ok");
+      return { text: "压力" + m.pressure, tone: tone };
+    },
+  },
+  {
+    id: "diskclean", name: "磁盘清理", icon: "⌫", group: "清理", order: 80,
+    desc: "只读扫描缓存、日志、废纸篓、开发产物与大文件，勾选后移入废纸篓，可恢复。",
+    badge: () => {
+      let d = null;
+      try { d = diskData; } catch (e) { d = null; }
+      if (!d) return { text: "未扫描", tone: "idle" };
+      return { text: "已扫描", tone: "ok" };
+    },
+  },
+  {
     id: "about", name: "关于本机", icon: "ⓘ", group: "系统", order: 60,
     desc: "机型与系统概要、部件与服务历史入口、版本信息与监控卡片布局重置。",
     badge: null,
@@ -164,6 +186,8 @@ const MODULE_HOOKS = {
   burn: () => { applyLayout(); redrawAll(); },
   monitor: () => { renderSensors(window._last); redrawAll(); },
   verify: () => { if (!reportData) loadInspect(); },
+  memclean: () => { memOnEnter(); },
+  diskclean: () => { diskOnEnter(); },
   about: () => loadHardware(),
 };
 
@@ -1565,9 +1589,14 @@ function applySettings(s) {
   document.body.dataset.density = s.density || "standard";
   if ($("setFill")) $("setFill").checked = s.chartFill !== false;
   if (s.dashboard) {
-    try { const d = JSON.parse(s.dashboard); if (Array.isArray(d) && d.length) layout = d; } catch (e) {}
+    try {
+      const d = JSON.parse(s.dashboard);
+      if (Array.isArray(d) && d.length) {
+        if (window.__layoutInit) { layout = d; layoutEarly = null; } else { layoutEarly = d; }
+      }
+    } catch (e) {}
   }
-  applyLayout();
+  if (window.__layoutInit) applyLayout();
   renderSwatches();
   renderSeriesColors();
   refreshColors();
@@ -1761,9 +1790,13 @@ const DEFAULT_LAYOUT = [
   { id: "fan", span: 12, h: 132 }, { id: "peaks", span: 12 }, { id: "history", span: 12 },
 ];
 let layout = DEFAULT_LAYOUT.map((x) => Object.assign({}, x));
+window.__layoutInit = true;
+if (layoutEarly) { layout = layoutEarly; layoutEarly = null; }
+applyLayout();
 const findL = (id) => layout.find((m) => m.id === id);
 
 function applyLayout() {
+  if (!window.__layoutInit) return;   // 脚本初始化早期（layout 尚未就绪）直接跳过，避免 TDZ 报错
   const dash = $("dashboard");
   if (!dash) return;
   layout.forEach((m) => {
@@ -2111,5 +2144,541 @@ document.addEventListener("mouseup", () => {
   $("zoomCanvas").classList.remove("dragging");
 });
 window.addEventListener("resize", () => { if ($("zoomWrap").classList.contains("show")) { resizeZoom(); renderZoom(); } });
+
+
+/* =========================================================================
+   公共格式化
+   ========================================================================= */
+function fmtBytes(b) {
+  const n = Number(b) || 0;
+  if (n >= 1024 ** 4) return (n / 1024 ** 4).toFixed(2) + " TB";
+  if (n >= 1024 ** 3) return (n / 1024 ** 3).toFixed(2) + " GB";
+  if (n >= 1024 ** 2) return (n / 1024 ** 2).toFixed(1) + " MB";
+  if (n >= 1024) return Math.round(n / 1024) + " KB";
+  return Math.round(n) + " B";
+}
+const fmtInt = (n) => (Number(n) || 0).toLocaleString("zh-CN");
+function fmtDate(ts) {
+  if (!ts) return "—";
+  const d = new Date(ts * 1000);
+  const p = (x) => String(x).padStart(2, "0");
+  return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes());
+}
+
+/* =========================================================================
+   内存清理
+   ========================================================================= */
+let memSnap = null;          // 最近一次内存快照
+let memApps = [];            // 运行中的用户 App
+let memMode = "light";       // light / pick / all
+let memSel = new Set();      // 已勾选的 pid
+let memBusy = false;
+let memBound = false;
+let memPending = null;       // 待确认的 { mode, pids }
+
+function memOnEnter() {
+  if (!memBound) memBind();
+  memRefreshStats();
+  if (memMode === "pick" && !memApps.length) memLoadApps();
+}
+
+function memBind() {
+  if (memBound) return;
+  memBound = true;
+
+  $("btnMemRefresh").addEventListener("click", () => memRefreshStats(true));
+
+  document.querySelectorAll("input[name=memModeRd]").forEach((rd) => {
+    rd.addEventListener("change", () => {
+      memMode = rd.value;
+      document.querySelectorAll("#memModes .mem-mode").forEach((el) => {
+        el.classList.toggle("sel", el.dataset.mode === memMode);
+      });
+      $("memPick").hidden = memMode !== "pick";
+      $("memConfirm").hidden = true;
+      memPending = null;
+      memUpdateHint();
+      if (memMode === "pick") memLoadApps();
+    });
+  });
+
+  $("btnMemPickAll").addEventListener("click", () => {
+    memApps.forEach((a) => memSel.add(a.pid));
+    document.querySelectorAll("#memAppList input[type=checkbox]").forEach((cb) => { cb.checked = true; });
+    memUpdatePickCount();
+  });
+  $("btnMemPickNone").addEventListener("click", () => {
+    memSel.clear();
+    document.querySelectorAll("#memAppList input[type=checkbox]").forEach((cb) => { cb.checked = false; });
+    memUpdatePickCount();
+  });
+  $("btnMemPickReload").addEventListener("click", () => memLoadApps());
+  $("btnMemStart").addEventListener("click", memStart);
+  $("btnMemCancel").addEventListener("click", () => {
+    memPending = null;
+    $("memConfirm").hidden = true;
+    toast("已取消，未做任何改动");
+  });
+  $("btnMemConfirm").addEventListener("click", memConfirmRun);
+}
+
+function memUpdateHint() {
+  const tips = {
+    light: "轻度模式：不会关闭任何程序",
+    pick: "自选模式：只关闭你勾选的程序",
+    all: "全部关闭：会先弹确认框列出名单",
+  };
+  $("memHint").textContent = tips[memMode] || "";
+}
+
+async function memRefreshStats(manual) {
+  const r = await call("memStats");
+  if (!r || !r.ok || !r.mem) { if (manual) toast("读取内存概况失败", true); return; }
+  memSnap = r.mem;
+  memRenderStats();
+  refreshBadges(true);
+}
+
+function memRenderStats() {
+  const m = memSnap;
+  if (!m) return;
+  const tone = m.pressure === "紧张" ? "danger" : (m.pressure === "偏高" ? "warn" : "ok");
+  const tiles = [
+    { k: "已用内存", v: fmtBytes(m.used), s: m.percent + "% 已被占用" },
+    { k: "可用内存", v: fmtBytes(m.available), s: "含可随时回收的缓存" },
+    { k: "内存压力", v: m.pressure, s: "系统内核档位", tone: tone },
+    { k: "交换空间", v: fmtBytes(m.swapUsed), s: "总量 " + fmtBytes(m.swapTotal) },
+  ];
+  $("memTiles").innerHTML = tiles.map((t) =>
+    '<div class="mem-tile">' +
+      '<div class="mt-k">' + esc(t.k) + '</div>' +
+      '<div class="mt-v ' + (t.tone || "") + '">' + esc(t.v) + '</div>' +
+      '<div class="mt-s">' + esc(t.s) + '</div>' +
+    '</div>'
+  ).join("");
+  $("memBar").style.width = Math.max(0, Math.min(100, Number(m.percent) || 0)) + "%";
+  $("memSub").textContent = "物理内存 " + fmtBytes(m.total) + " · 已用 " + fmtBytes(m.used) + " · 可用 " + fmtBytes(m.available);
+}
+
+async function memLoadApps() {
+  $("memAppList").innerHTML = '<div class="mp-empty">正在读取运行中的 App…</div>';
+  const r = await call("memApps");
+  if (!r || !r.ok || !Array.isArray(r.apps)) {
+    $("memAppList").innerHTML = '<div class="mp-empty">读取失败，请点「刷新列表」重试</div>';
+    return;
+  }
+  memApps = r.apps;
+  memSel = new Set([...memSel].filter((pid) => memApps.some((a) => a.pid === pid)));
+  if (!memApps.length) {
+    $("memAppList").innerHTML = '<div class="mp-empty">当前没有可关闭的用户 App</div>';
+  } else {
+    $("memAppList").innerHTML = memApps.map((a) => {
+      const ico = a.icon
+        ? '<img class="mp-ico" alt="" src="data:image/png;base64,' + a.icon + '">'
+        : '<span class="mp-ico ph"></span>';
+      return '<label class="mp-row">' +
+        '<input type="checkbox" data-pid="' + a.pid + '"' + (memSel.has(a.pid) ? " checked" : "") + '>' +
+        ico +
+        '<span class="mp-name">' + esc(a.name) + '</span>' +
+        '<span class="mp-mem">' + fmtBytes(a.mem) + '</span>' +
+        '<span class="mp-pid">PID ' + a.pid + '</span>' +
+      '</label>';
+    }).join("");
+    $("memAppList").querySelectorAll("input[type=checkbox]").forEach((cb) => {
+      cb.addEventListener("change", () => {
+        const pid = Number(cb.dataset.pid);
+        if (cb.checked) memSel.add(pid); else memSel.delete(pid);
+        memUpdatePickCount();
+      });
+    });
+  }
+  memUpdatePickCount();
+}
+
+function memUpdatePickCount() {
+  const el = $("memPickCount");
+  if (!el) return;
+  el.textContent = "运行中的用户 App：" + memApps.length + " 个 · 已勾选 " + memSel.size + " 个";
+}
+
+function memShowConfirm(title, desc, list) {
+  $("memConfirmTitle").textContent = title;
+  $("memConfirmDesc").textContent = desc;
+  $("memConfirmList").innerHTML = list.map((a) =>
+    '<div class="mc-item"><span>' + esc(a.name) + '</span><span class="mc-dim">' + fmtBytes(a.mem) + ' · PID ' + a.pid + '</span></div>'
+  ).join("");
+  $("memConfirm").hidden = false;
+  $("memConfirm").scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+
+async function memStart() {
+  if (memBusy) return;
+  if (memMode === "light") { await memRunLight(); return; }
+
+  if (memMode === "pick") {
+    if (!memApps.length) await memLoadApps();
+    const pids = [...memSel];
+    if (!pids.length) { toast("请先勾选要关闭的程序（默认全不勾）", true); return; }
+    const list = memApps.filter((a) => memSel.has(a.pid));
+    memPending = { mode: "pick", pids: pids };
+    memShowConfirm(
+      "确认关闭这 " + list.length + " 个程序？",
+      "会先尝试优雅退出（等同点红叉），5 秒内未退出才会强制结束，结果里会标注哪些是被强制结束的。未保存的内容可能丢失。",
+      list
+    );
+    return;
+  }
+
+  // 全部关闭（二次确认）
+  if (!memApps.length) await memLoadApps();
+  const list = memApps.slice();
+  if (!list.length) { toast("当前没有可关闭的用户 App", true); return; }
+  memPending = { mode: "all", pids: list.map((a) => a.pid) };
+  memShowConfirm(
+    "确认关闭全部 " + list.length + " 个用户 App？",
+    "关闭后未保存的内容会丢失。系统进程、Finder（访达）、Dock、WindowServer 与本 App 不在名单内，绝不会被关闭。",
+    list
+  );
+}
+
+async function memRunLight() {
+  memBusy = true;
+  memSetBusy(true);
+  const r = await call("memCleanLight");
+  memBusy = false;
+  memSetBusy(false);
+  if (!r || !r.ok) { toast("清理失败", true); return; }
+  memRenderResult("light", null, r);
+  await memRefreshStats();
+}
+
+async function memConfirmRun() {
+  if (memBusy || !memPending) return;
+  const pending = memPending;
+  memPending = null;
+  $("memConfirm").hidden = true;
+  memBusy = true;
+  memSetBusy(true);
+
+  const quit = await call("memQuitApps", { pids: pending.pids });
+  const clean = await call("memCleanLight");
+
+  memBusy = false;
+  memSetBusy(false);
+  memRenderResult(pending.mode, quit, clean);
+  await memLoadApps();
+  await memRefreshStats();
+}
+
+function memSetBusy(on) {
+  const b = $("btnMemStart");
+  if (!b) return;
+  b.disabled = on;
+  b.textContent = on ? "正在执行…" : "开始清理";
+}
+
+function memRenderResult(mode, quit, clean) {
+  const card = $("memResultCard");
+  if (!card) return;
+  card.hidden = false;
+
+  const freed = (clean && clean.freed) || 0;
+  const elapsed = (clean && clean.elapsed) || 0;
+  const modeText = { light: "轻度模式", pick: "自选关闭程序", all: "全部关闭" }[mode] || mode;
+
+  let html = '<div class="mem-res-top">' +
+    '<div class="mem-res-big"><div class="mrb-v">' + fmtBytes(freed) + '</div><div class="mrb-k">本次释放（仅供参考）</div></div>' +
+    '<div class="mem-res-big"><div class="mrb-v">' + elapsed + ' 秒</div><div class="mrb-k">耗时</div></div>' +
+    '<div class="mem-res-big"><div class="mrb-v">' + (quit ? (quit.closed || 0) : 0) + '</div><div class="mrb-k">已关闭程序</div></div>' +
+  '</div>';
+
+  html += '<div class="mem-note">清理方式：' + esc(modeText) + '。macOS 会动态调整内存占用，释放量仅供参考。</div>';
+
+  if (quit && Array.isArray(quit.apps) && quit.apps.length) {
+    html += '<div class="mem-sec-t">程序关闭结果</div><div class="mem-steps">' +
+      quit.apps.map((a) => {
+        const ok = a.closed === true;
+        const badge = a.forced ? '<span class="st-tag danger">强制结束</span>' : (ok ? '<span class="st-tag ok">已退出</span>' : '<span class="st-tag warn">未退出</span>');
+        return '<div class="mem-step"><span class="st-name">' + esc(a.name) + ' · PID ' + a.pid + '</span>' +
+          '<span class="st-d">' + esc(a.reason || "") + '</span>' + badge + '</div>';
+      }).join("") + '</div>';
+  } else if (mode !== "light") {
+    html += '<div class="mem-note">没有程序被关闭。</div>';
+  } else {
+    html += '<div class="mem-note">轻度模式未关闭任何程序。</div>';
+  }
+
+  if (clean && Array.isArray(clean.steps)) {
+    html += '<div class="mem-sec-t">执行明细</div><div class="mem-steps">' +
+      clean.steps.map((s) => {
+        const tag = s.status === "skipped"
+          ? '<span class="st-tag warn">已跳过</span>'
+          : '<span class="st-tag ok">已完成</span>';
+        return '<div class="mem-step"><span class="st-name">' + esc(s.name) + '</span>' +
+          '<span class="st-d">' + esc(s.detail || "") + '</span>' + tag + '</div>';
+      }).join("") + '</div>';
+  }
+
+  if (clean && clean.after) {
+    html += '<div class="mem-note">清理后：已用 ' + fmtBytes(clean.after.used) +
+      ' · 可用 ' + fmtBytes(clean.after.available) +
+      ' · 压力 ' + esc(clean.after.pressure) +
+      ' · Swap ' + fmtBytes(clean.after.swapUsed) + '</div>';
+  }
+
+  $("memResult").innerHTML = html;
+  $("memResSub").textContent = modeText + " · " + new Date().toLocaleTimeString("zh-CN");
+}
+
+/* =========================================================================
+   磁盘垃圾清理
+   ========================================================================= */
+let diskData = null;         // 扫描结果
+let diskSel = new Set();     // 已勾选路径
+let diskScanning = false;
+let diskBound = false;
+let diskPending = null;
+
+const DISK_LEVELS = [
+  { k: "safe", t: "安全", tip: "删掉不影响使用，需要时会自动重建" },
+  { k: "careful", t: "需留意", tip: "删掉可能丢失历史记录或设备备份，确认后再勾" },
+  { k: "confirm", t: "需要你确认", tip: "用途需你自己判断，默认不勾选" },
+];
+
+function diskOnEnter() {
+  if (!diskBound) diskBind();
+  if (diskData) diskRenderCats(); else diskUpdateSum();
+}
+
+/* Swift 侧扫描进度回调 */
+window.__diskProgress = function (pct, text) {
+  const bar = $("diskProgBar");
+  const txt = $("diskProgTxt");
+  if (bar) bar.style.width = Math.max(0, Math.min(100, Number(pct) || 0)) + "%";
+  if (txt) txt.textContent = "扫描中 " + Math.round(Number(pct) || 0) + "% · " + (text || "");
+};
+
+function diskBind() {
+  if (diskBound) return;
+  diskBound = true;
+  $("btnDiskScan").addEventListener("click", diskScan);
+  $("btnDiskClean").addEventListener("click", diskAskClean);
+  $("btnDiskCancel").addEventListener("click", () => {
+    diskPending = null;
+    $("diskConfirmCard").hidden = true;
+    toast("已取消，未删除任何文件");
+  });
+  $("btnDiskConfirm").addEventListener("click", diskDoClean);
+
+  const host = $("diskCats");
+  host.addEventListener("change", (e) => {
+    const t = e.target;
+    if (t.classList.contains("dc-cb")) {
+      const cat = diskData.cats.find((c) => c.id === t.dataset.cat);
+      if (!cat) return;
+      cat.items.forEach((it) => { if (t.checked) diskSel.add(it.path); else diskSel.delete(it.path); });
+      diskRenderCats();
+    } else if (t.classList.contains("dci-cb")) {
+      if (t.checked) diskSel.add(t.dataset.path); else diskSel.delete(t.dataset.path);
+      diskRenderCats();
+    }
+  });
+  host.addEventListener("click", (e) => {
+    const btn = e.target.closest(".dc-more");
+    if (!btn) return;
+    const box = host.querySelector('.dc-items[data-for="' + btn.dataset.cat + '"]');
+    if (!box) return;
+    box.hidden = !box.hidden;
+    btn.textContent = box.hidden ? "明细" : "收起";
+  });
+}
+
+async function diskScan() {
+  if (diskScanning) return;
+  diskScanning = true;
+  $("btnDiskScan").disabled = true;
+  $("btnDiskScan").textContent = "扫描中…";
+  $("diskProg").hidden = false;
+  $("diskProgBar").style.width = "0%";
+  $("diskProgTxt").textContent = "正在统计各类垃圾…";
+  $("diskSum").textContent = "扫描进行中，全程只读，不会改动任何文件。";
+
+  const r = await call("diskScan", {});
+  diskScanning = false;
+  $("btnDiskScan").disabled = false;
+  $("btnDiskScan").textContent = "重新扫描";
+  $("diskProg").hidden = true;
+
+  if (!r || !r.ok || !Array.isArray(r.cats)) {
+    $("diskSum").textContent = "扫描失败，请重试";
+    toast("扫描失败", true);
+    return;
+  }
+  diskData = r;
+  diskSel = new Set();
+  // 默认勾选：仅「安全」级别；「需你确认」一律不勾
+  r.cats.forEach((c) => {
+    if (c.level === "safe") c.items.forEach((it) => diskSel.add(it.path));
+  });
+  diskRenderCats();
+  refreshBadges(true);
+  toast("扫描完成，共发现可清理 " + fmtBytes(r.totalBytes));
+}
+
+function diskRenderCats() {
+  const host = $("diskCats");
+  if (!host) return;
+  if (!diskData) { host.innerHTML = ""; diskUpdateSum(); return; }
+
+  let html = "";
+  DISK_LEVELS.forEach((lv) => {
+    const cats = diskData.cats.filter((c) => c.level === lv.k);
+    if (!cats.length) return;
+    const live = cats.filter((c) => c.exists);
+    html += '<div class="dc-group">' +
+      '<div class="dc-group-hd"><span class="dc-badge ' + lv.k + '">' + lv.t + '</span>' +
+      '<span class="dc-group-tip">' + esc(lv.tip) + '</span></div>';
+    if (!live.length) {
+      html += '<div class="dc-empty">该分区暂无可清理项</div></div>';
+      return;
+    }
+    live.forEach((c) => {
+      const allSel = c.items.length > 0 && c.items.every((it) => diskSel.has(it.path));
+      const someSel = c.items.some((it) => diskSel.has(it.path));
+      html += '<div class="dc-row">' +
+        '<label class="dc-main">' +
+          '<input type="checkbox" class="dc-cb" data-cat="' + c.id + '"' + (allSel ? " checked" : "") + '>' +
+          '<div class="dc-body">' +
+            '<div class="dc-t">' + esc(c.name) + (someSel && !allSel ? '<span class="dc-part">部分选中</span>' : '') + '</div>' +
+            '<div class="dc-d">' + esc(c.desc) + '</div>' +
+          '</div>' +
+          '<div class="dc-num"><b>' + fmtBytes(c.bytes) + '</b><span>' + fmtInt(c.files) + ' 个文件</span></div>' +
+        '</label>' +
+        (c.items.length
+          ? '<button class="btn ghost tiny dc-more" data-cat="' + c.id + '">明细</button>'
+          : '') +
+      '</div>' +
+      '<div class="dc-items" data-for="' + c.id + '" hidden>' +
+        c.items.map((it) => {
+          const chk = diskSel.has(it.path);
+          return '<label class="dci-row" title="' + esc(it.path) + '">' +
+            '<input type="checkbox" class="dci-cb" data-path="' + esc(it.path) + '"' + (chk ? " checked" : "") + '>' +
+            '<span class="dci-name">' + esc(it.name) + (it.kind === "dir" ? '<span class="dci-tag">目录</span>' : '') + '</span>' +
+            '<span class="dci-size">' + fmtBytes(it.bytes) + '</span>' +
+            '<span class="dci-time">' + fmtDate(it.mtime) + '</span>' +
+            '<span class="dci-path">' + esc(it.path) + '</span>' +
+          '</label>';
+        }).join("") +
+        (c.truncated ? '<div class="dci-more">仅展示体积最大的 120 项</div>' : '') +
+      '</div>';
+    });
+    html += '</div>';
+  });
+  host.innerHTML = html;
+  diskUpdateSum();
+}
+
+function diskSelectedBytes() {
+  if (!diskData) return 0;
+  let sum = 0;
+  diskData.cats.forEach((c) => c.items.forEach((it) => { if (diskSel.has(it.path)) sum += Number(it.bytes) || 0; }));
+  return sum;
+}
+
+function diskUpdateSum() {
+  const btn = $("btnDiskClean");
+  if (!diskData) {
+    $("diskSum").textContent = "点「开始扫描」统计各类垃圾的体积；扫描不会修改、删除任何文件。";
+    if (btn) btn.disabled = true;
+    return;
+  }
+  const n = diskSel.size;
+  $("diskSum").innerHTML = '共发现可清理 <b>' + fmtBytes(diskData.totalBytes) + '</b> · ' +
+    '已勾选 <b>' + fmtInt(n) + '</b> 项，合计 <b>' + fmtBytes(diskSelectedBytes()) + '</b>' +
+    '<span class="dc-scanned">扫描时间 ' + fmtDate(diskData.scannedAt) + '</span>';
+  if (btn) {
+    btn.disabled = n === 0;
+    btn.textContent = n === 0 ? "清理选中项" : "清理选中项（" + fmtInt(n) + " 项）";
+  }
+}
+
+function diskAskClean() {
+  if (!diskData || !diskSel.size) { toast("请先勾选要清理的项目", true); return; }
+  const paths = [...diskSel];
+  const bytes = diskSelectedBytes();
+  diskPending = paths;
+
+  const byCat = {};
+  diskData.cats.forEach((c) => {
+    c.items.forEach((it) => { if (diskSel.has(it.path)) byCat[c.name] = (byCat[c.name] || 0) + 1; });
+  });
+  const catText = Object.keys(byCat).map((k) => k + " " + byCat[k] + " 项").join(" · ");
+
+  $("diskConfirmDesc").innerHTML = '将删除 <b>' + fmtInt(paths.length) + '</b> 项，共 <b>' + fmtBytes(bytes) + '</b>。<br>' +
+    '涉及：' + esc(catText) + '。<br>所有文件会被移入「废纸篓」，可随时从废纸篓恢复。';
+  $("diskConfirmList").innerHTML = paths.slice(0, 8).map((p) =>
+    '<div class="mc-item"><span class="ci-path">' + esc(p) + '</span></div>'
+  ).join("") + (paths.length > 8 ? '<div class="mc-more">…等共 ' + fmtInt(paths.length) + ' 项</div>' : '');
+  $("diskConfirmCard").hidden = false;
+  $("diskConfirmCard").scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+
+async function diskDoClean() {
+  if (!diskPending || !diskPending.length) return;
+  const paths = diskPending;
+  diskPending = null;
+  $("diskConfirmCard").hidden = true;
+  $("btnDiskClean").disabled = true;
+  $("btnDiskClean").textContent = "正在清理…";
+
+  const r = await call("diskTrash", { paths: paths });
+  if (!r || !r.ok) { toast("清理失败", true); diskUpdateSum(); return; }
+
+  // 从结果中扣除已删除项
+  const gone = new Set((r.deleted || []).map((d) => d.path));
+  if (diskData) {
+    diskData.cats.forEach((c) => {
+      c.items = c.items.filter((it) => !gone.has(it.path));
+      c.bytes = c.items.reduce((a, it) => a + (Number(it.bytes) || 0), 0);
+      c.files = c.items.reduce((a, it) => a + (Number(it.files) || 0), 0);
+      c.exists = c.items.length > 0;
+    });
+    diskData.totalBytes = diskData.cats.reduce((a, c) => a + (Number(c.bytes) || 0), 0);
+  }
+  gone.forEach((p) => diskSel.delete(p));
+  // 失败项保留勾选，便于用户重试或手动处理
+  diskRenderCats();
+  diskRenderResult(r);
+  refreshBadges(true);
+}
+
+function diskRenderResult(r) {
+  const card = $("diskResultCard");
+  if (!card) return;
+  card.hidden = false;
+  const deleted = r.deleted || [];
+  const failed = r.failed || [];
+  let html = '<div class="mem-res-top">' +
+    '<div class="mem-res-big"><div class="mrb-v">' + fmtBytes(r.freed || 0) + '</div><div class="mrb-k">实际释放空间</div></div>' +
+    '<div class="mem-res-big"><div class="mrb-v">' + fmtInt(r.successCount || 0) + '</div><div class="mrb-k">成功移入废纸篓</div></div>' +
+    '<div class="mem-res-big"><div class="mrb-v">' + fmtInt(r.failedCount || 0) + '</div><div class="mrb-k">失败项</div></div>' +
+  '</div>';
+  if (deleted.length) {
+    html += '<div class="mem-sec-t">成功项</div><div class="mem-steps">' +
+      deleted.slice(0, 40).map((d) =>
+        '<div class="mem-step"><span class="st-name">' + esc(d.path) + '</span><span class="st-d">' + fmtBytes(d.bytes) + '</span><span class="st-tag ok">已移入废纸篓</span></div>'
+      ).join("") + (deleted.length > 40 ? '<div class="dci-more">…共 ' + fmtInt(deleted.length) + ' 项</div>' : "") + '</div>';
+  }
+  if (failed.length) {
+    html += '<div class="mem-sec-t">失败项（可稍后重试或手动处理）</div><div class="mem-steps">' +
+      failed.slice(0, 40).map((f) =>
+        '<div class="mem-step"><span class="st-name">' + esc(f.path) + '</span><span class="st-d">' + esc(f.reason || "未知原因") + '</span><span class="st-tag warn">失败</span></div>'
+      ).join("") + '</div>';
+  }
+  html += '<div class="mem-note">删除均为移入废纸篓，可从废纸篓还原。</div>';
+  $("diskResult").innerHTML = html;
+  $("diskResSub").textContent = new Date().toLocaleTimeString("zh-CN");
+}
+
 
 boot();
