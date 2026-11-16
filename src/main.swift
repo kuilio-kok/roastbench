@@ -383,6 +383,10 @@ final class Metrics {
     private(set) var available = false
     private(set) var latest: Sample?
     private var proc: Process?
+    private var pipe: Pipe?
+    private var reader: FileHandle?
+    private var pendingRestart: DispatchWorkItem?
+    private var generation = 0
     private var buffer = ""
     private(set) var gotFirst = false
     private var skipped = 0
@@ -391,6 +395,9 @@ final class Metrics {
     var fuseTripped = false
 
     func start() {
+        // 防重入：已经有活着的 macmon 就绝不重复拉起第二个
+        if let p = proc, p.isRunning { return }
+        if proc != nil { stop() }
         var path = Bundle.main.path(forResource: "macmon", ofType: nil)
         if path == nil {
             for c in ["/opt/homebrew/bin/macmon", "/usr/local/bin/macmon"] where FileManager.default.fileExists(atPath: c) {
@@ -417,17 +424,32 @@ final class Metrics {
             return
         }
         proc = p
+        self.pipe = pipe
+        buffer = ""
+        generation &+= 1
+        let gen = generation
+        let reader = pipe.fileHandleForReading
+        self.reader = reader
 
-        pipe.fileHandleForReading.readabilityHandler = { [weak self] h in
+        reader.readabilityHandler = { [weak self] h in
             let data = h.availableData
-            if data.isEmpty { return }
+            if data.isEmpty {
+                // EOF：macmon 已退出或写端已关闭。必须马上注销 handler，
+                // 否则 readabilityHandler 会以「可读」状态被反复唤起，形成忙循环空转。
+                h.readabilityHandler = nil
+                DispatchQueue.main.async { [weak self] in self?.childExited(gen) }
+                return
+            }
             guard let chunk = String(data: data, encoding: .utf8) else { return }
             self?.consume(chunk)
         }
 
         // 5 秒还没数据就判定不可用（比如 Intel 机型）
         DispatchQueue.global().asyncAfter(deadline: .now() + 5) { [weak self] in
-            if self?.gotFirst != true { DispatchQueue.main.async { self?.onUnavailable?() } }
+            DispatchQueue.main.async {
+                guard let self = self, self.generation == gen, !self.gotFirst else { return }
+                self.onUnavailable?()
+            }
         }
     }
 
@@ -491,15 +513,51 @@ final class Metrics {
         }
     }
 
+    /// 子进程自行退出（EOF / 崩溃）后的收尾。必须校验代次，
+    /// 否则旧实例的回调会把新实例的句柄误清掉。
+    private func childExited(_ gen: Int) {
+        guard gen == generation else { return }
+        generation &+= 1
+        reader?.readabilityHandler = nil
+        reader = nil
+        pipe = nil
+        if let p = proc {
+            proc = nil
+            DispatchQueue.global(qos: .utility).async { p.waitUntilExit() }
+        }
+    }
+
     func stop() {
-        proc?.terminate()
+        // 先作废旧代次并摘掉回调，确保在途的 readabilityHandler 不会再碰即将释放的对象
+        generation &+= 1
+        pendingRestart?.cancel()
+        pendingRestart = nil
+        reader?.readabilityHandler = nil
+        reader = nil
+        let p = proc
+        let pp = pipe
         proc = nil
+        pipe = nil
+        buffer = ""
+        guard let p = p else { return }
+        // 关掉本进程持有的写端，macmon 读到 EOF 会自行退出
+        try? pp?.fileHandleForWriting.close()
+        if p.isRunning { p.terminate() }
+        // 交给后台等它真正退出；Process 与 Pipe 在这期间保持被引用，
+        // 绝不能在子进程还活着时就把句柄释放掉
+        DispatchQueue.global(qos: .utility).async {
+            p.waitUntilExit()
+            _ = pp
+        }
     }
 
     /// 采样间隔变了就重启数据源
     func restart() {
         stop()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { self.start() }
+        pendingRestart?.cancel()
+        let item = DispatchWorkItem { [weak self] in self?.start() }
+        pendingRestart = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: item)
     }
 
     static func json(_ s: Sample, power: String, batt: Int) -> String {

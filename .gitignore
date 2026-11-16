@@ -1,10 +1,31 @@
-# Build artifacts
-build/
-*.app
-*.zip
-
-# macOS
+# ---------- macOS 系统垃圾 ----------
 .DS_Store
+._*
+.AppleDouble
+.LSOverride
+Icon?
+.Spotlight-V100/
+.Trashes/
 
-# Editors
-.workbuddy/
+# ---------- 构建产物（build.sh 每次 rm -rf build 后重建）----------
+build/
+*.app/
+*.dSYM/
+*.o
+*.d
+
+# ---------- 备份 / 临时文件 ----------
+*.bak
+*.bak-*
+*.orig
+*.rej
+*~
+*.swp
+*.tmp
+*.log
+
+# ---------- 编辑器 / IDE ----------
+.vscode/
+.idea/
+*.xcuserstate
+xcuserdata/
