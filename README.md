@@ -1,3 +1,14 @@
+---
+AIGC:
+    Label: "1"
+    ContentProducer: 001191440300708461136T1XGW3
+    ProduceID: a1c20255bf947eb639efbd79df56ea7c_f27d656ee1a411f1a768525400cd780f
+    ReservedCode1: iCvTN+qpYg9lAKrmpDTKm3Y8pQDIU+f17B/2jvRQJztZZusUzyES5DWTXn8O29b3YLWat2Blx2tzwod7UpHQ/rJNiVN+qONC+AHxwPZHnKySpa8fF+QooUFs4Oqce04aFlrtLqGlIP1v78yRBBTER3tPFsNN7cBmRfJfx6bPnIyQsXknRm4lT4pPiVE=
+    ContentPropagator: 001191440300708461136T1XGW3
+    PropagateID: a1c20255bf947eb639efbd79df56ea7c_f27d656ee1a411f1a768525400cd780f
+    ReservedCode2: iCvTN+qpYg9lAKrmpDTKm3Y8pQDIU+f17B/2jvRQJztZZusUzyES5DWTXn8O29b3YLWat2Blx2tzwod7UpHQ/rJNiVN+qONC+AHxwPZHnKySpa8fF+QooUFs4Oqce04aFlrtLqGlIP1v78yRBBTER3tPFsNN7cBmRfJfx6bPnIyQsXknRm4lT4pPiVE=
+---
+
 <div align="center">
 
 <img src="docs/banner.png" alt="Mac 工具箱 — 压测 · 监控 · 验机 · 清理，一个 App 全包" width="100%">
@@ -7,7 +18,7 @@
 [![Stars](https://img.shields.io/github/stars/kuilio-kok/roastbench?style=flat-square&color=fbbf24)](https://github.com/kuilio-kok/roastbench/stargazers)
 [![License](https://img.shields.io/github/license/kuilio-kok/roastbench?style=flat-square&label=%E8%AE%B8%E5%8F%AF%E8%AF%81&color=a78bfa)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%2014%2B%20%C2%B7%20Apple%20Silicon-black?style=flat-square&logo=apple)](#-系统要求与已知限制)
-[![Modules](https://img.shields.io/badge/%E5%8A%9F%E8%83%BD%E6%A8%A1%E5%9D%97-8%20%E4%B8%AA-2dd4bf?style=flat-square)](#-模块清单)
+[![Modules](https://img.shields.io/badge/%E5%8A%9F%E8%83%BD%E6%A8%A1%E5%9D%97-11%20%E4%B8%AA-2dd4bf?style=flat-square)](#-模块清单)
 
 **压测、监控、验机、清理 —— 一个双击就能用的 Mac 工具箱。**
 不装 Homebrew，不敲一行命令，打开就能用。
@@ -50,7 +61,7 @@
 
 ## 🧩 模块清单
 
-侧栏按分组陈列 8 个模块，每项都带实时状态徽标（就绪 / 运行中 / 在线 / 已扫描 / 发现异常…）。
+侧栏按分组陈列 11 个模块，每项都带实时状态徽标（就绪 / 运行中 / 在线 / 已扫描 / 发现异常…）。
 
 | 分组 | 模块 | 一句话说明 |
 |---|---|---|
@@ -62,6 +73,9 @@
 | 系统 | ⓘ 关于本机 | 机型与系统概要、部件与服务历史入口、监控卡片布局重置 |
 | 清理 | ◑ 内存清理 | 三档回收内存，全程不申请管理员权限 |
 | 清理 | ⌫ 磁盘清理 | 扫描缓存、日志、废纸篓、开发产物与大文件，勾选后移入废纸篓 |
+| 维护 | ⌨ 键盘清洁 | 锁住键盘，放心擦拭键帽与缝隙，Esc 或点击退出 |
+| 维护 | ◉ 屏幕清洁 | 纯色背景看清灰尘与污渍，擦完点击或按任意键退出 |
+| 维护 | ☾ 合盖不休眠 | 合上盖子也不休眠，适合移动中跑长任务，用完记得关 |
 
 ### ♨ 性能压测
 
@@ -237,25 +251,52 @@ cd roastbench
 ```
 src/
   main.swift       App 主体、窗口、WebView、API 分支
-  StatusBar.swift  菜单栏常驻与模式切换
+  StatusBar.swift  菜单栏常驻、可配置数据面板、给小组件写快照
+  Maintenance.swift 键盘清洁 · 屏幕清洁 · 合盖不休眠 · URL scheme 入口
   Icon.swift       图标绘制（浅色 / 深色）
   Inspect.swift    整机信息采集与原装性核对
   Cleaners.swift   内存清理 · 磁盘清理 · SafePath 安全路径
+  widget/          WidgetKit 扩展：控制中心控制项 + 可配置小组件
   icongen/         生成 iconset 的小工具
   ui/              index.html · style.css · app.js（模块注册表）
 build.sh
 docs/              banner 与截图
 ```
 
+<a id="-菜单栏与控制中心"></a>
+
+## 📊 菜单栏与控制中心
+
+**菜单栏**常驻一个图标，下拉就是一块数据面板，标题和数据行都能自己配：
+
+- 标题最多挑 3 项、面板最多挑 5 项，8 个指标随便组合：内存 / CPU / GPU / 温度 / 功耗 / 风扇 / 磁盘 / 电池
+- 每行都带进度条，内存和温度超阈值会自动变色
+- 设置路径：偏好设置 → 菜单栏与控制中心 → 点 chip 勾选，改完立刻生效
+
+**控制中心**（macOS 26+）里多了 4 个控制项，下拉控制中心直接能看到内存占用：
+
+| 控制项 | 作用 |
+|---|---|
+| 内存占用 | 按钮标题就是当前百分比，点一下打开主窗口 |
+| 屏幕清洁 | 一键进深色全屏，擦完点一下退出 |
+| 键盘清洁 | 一键锁键盘，Esc 退出 |
+| 合盖不休眠 | 打开开关页，输一次管理员密码生效 |
+
+添加方式：点开控制中心 → 最下方「编辑控制」→ 在列表里找到 **Mac 工具箱** → 把想要的控制拖出来。
+
+**通知中心 / 桌面小组件**：小号和中号两种，长按（或右键）→ 编辑小组件，可以勾选想看的指标，温度和功耗需要主 App 开着才有数（数据由主 App 每 2 秒写进扩展容器）。
+
+**键盘清洁不再需要辅助功能授权**：遮罩窗口重写了 `canBecomeKey`，自己就是键盘焦点，按键不会再传给别的 App；之前授过权的，连系统级快捷键也会一起吞掉。
+
 <a id="-系统要求与已知限制"></a>
 
 ## 💻 系统要求与已知限制
 
-- macOS 14 (Sonoma) 或更高
+- macOS 14 (Sonoma) 或更高；**控制中心控制项与小组件需要 macOS 26+**（ControlWidget 从 26 才开始对第三方开放）
 - 实时曲线与传感器读数需要 **Apple Silicon（M 系列）**；Intel Mac 为通用二进制可正常构建与运行压测，但传感器曲线没有数据
 - 未做 Apple 公证（无付费开发者账号），第一次打开需右键 → 打开
 - 受系统保护（TCC）限制的目录读不到时，磁盘清理只会跳过，不会报错轰炸
-- App 全部 off-screen 工作在用户态完成，不修改系统设置、不停用服务、不申请辅助功能权限
+- 压测、监控、清理、清洁模式全部在用户态完成，不修改系统设置、不停用服务；只有「合盖不休眠」需要管理员密码（`pmset -a disablesleep`）
 
 ## 📅 版本演进
 
@@ -266,6 +307,8 @@ docs/              banner 与截图
 | **v2.9** | 新增整机信息与验机报告、接入 Apple 内置诊断入口，修复关窗退出崩溃 |
 | **v3.0** | 重构为 **Mac 工具箱**：侧栏分区导航 + 模块注册表架构，功能平权、可扩展 |
 | **v3.1** | 名称全面统一为「Mac 工具箱」，图标改四宫格 mark 并随深浅色切换，界面精简；移除总览分区（默认直达性能压测），新增字体粗细调节与壁纸无极取色；新增**内存清理**与**磁盘清理**两个模块 |
+| **v3.2** | 新增「维护」分组：**键盘清洁**（锁键盘擦拭）、**屏幕清洁**（纯色背景清灰）、**合盖不休眠**（电池下也生效，需管理员授权）；菜单栏下拉加入数据**小组件面板**（内存 / CPU / GPU 占用与温度 / 功耗 / 风扇），并可在菜单栏一键进入清洁模式、开关合盖不休眠 |
+| **v3.3** | 新增 **WidgetKit 扩展**：控制中心多了「内存占用 / 屏幕清洁 / 键盘清洁 / 合盖不休眠」四个控制项，通知中心与桌面多了可自由组合指标的**小组件**；菜单栏标题与面板数据行改为**可配置**（8 项指标任选 3 / 5）；键盘清洁改为**零权限方案**（不再依赖辅助功能授权）；App 与扩展改用正确的 bundle id 签名，新增 `mactoolbox://` URL scheme 支持外部唤起 |
 
 <a id="-faq"></a>
 
@@ -373,3 +416,4 @@ Requires macOS 14+; live sensor charts need Apple Silicon. [中文说明见上�
 你的 star 是继续迭代的最大动力 ⚡
 
 </div>
+*（内容由AI生成，仅供参考）*

@@ -855,3 +855,19 @@ body[data-density="relaxed"] .dashboard{gap:16px}
   .mem-tiles{grid-template-columns:repeat(2,1fr)}
   .mem-res-top{grid-template-columns:1fr}
 }
+
+/* 维护模块（键盘清洁 / 屏幕清洁 / 合盖不休眠） */
+.clean-hero{display:flex;gap:14px;align-items:flex-start;padding:16px;border-radius:12px;background:linear-gradient(160deg,color-mix(in srgb,var(--accent) 12%,transparent),transparent);border:1px solid color-mix(in srgb,var(--accent) 28%,transparent);margin-bottom:12px}
+.clean-ico{flex:none;font-size:26px;line-height:1.3}
+.clean-d{font-size:.84em;color:var(--text-2);line-height:1.7}
+.clean-d b{color:var(--text)}
+.clean-actions{margin-top:12px}
+.clean-actions .btn{flex:1}
+
+
+/* ---------- 菜单栏指标 chips ---------- */
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{font:inherit;font-size:.84em;padding:6px 12px;border-radius:999px;border:1px solid var(--hair-strong);background:var(--seg-bg);color:var(--text-2);cursor:pointer;transition:background .16s var(--ease),color .16s var(--ease),border-color .16s var(--ease)}
+.chip:hover{color:var(--text);background:var(--panel-hi)}
+.chip.on{background:var(--accent);border-color:transparent;color:#fff;font-weight:600}
+.clean-note{margin-top:12px;font-size:.8em;line-height:1.65;color:var(--text-3)}

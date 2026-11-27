@@ -175,6 +175,21 @@ const TOOLBOX_MODULES = [
     },
   },
   {
+    id: "keyclean", name: "键盘清洁", icon: "⌨", group: "维护", order: 90,
+    desc: "锁住键盘，放心擦拭键帽与缝隙，Esc 或点击屏幕退出。",
+    badge: null,
+  },
+  {
+    id: "screenclean", name: "屏幕清洁", icon: "◉", group: "维护", order: 91,
+    desc: "纯色背景看清灰尘与污渍，擦完点击或按任意键退出。",
+    badge: null,
+  },
+  {
+    id: "nosleep", name: "合盖不休眠", icon: "☾", group: "维护", order: 92,
+    desc: "合上盖子也不休眠，适合移动中跑长任务，用完记得关。",
+    badge: () => { try { return noSleepOn ? { text: "已开启", tone: "warn" } : { text: "已关闭", tone: "idle" }; } catch (e) { return null; } },
+  },
+  {
     id: "about", name: "关于本机", icon: "ⓘ", group: "系统", order: 60,
     desc: "机型与系统概要、部件与服务历史入口、版本信息与监控卡片布局重置。",
     badge: null,
@@ -188,6 +203,9 @@ const MODULE_HOOKS = {
   verify: () => { if (!reportData) loadInspect(); },
   memclean: () => { memOnEnter(); },
   diskclean: () => { diskOnEnter(); },
+  keyclean: () => { keyCleanBind(); },
+  screenclean: () => { screenCleanBind(); },
+  nosleep: () => { noSleepOnEnter(); },
   about: () => loadHardware(),
 };
 
@@ -865,6 +883,7 @@ window.__metricsUnavailable = () => {
   $("aboutSrc").textContent = "不可用（非 Apple Silicon）";
 };
 window.__note = (msg) => toast(msg, true);
+window.__nav = (id) => navigate(id);
 window.__inforefresh = (i) => { renderInfo(i); };
 window.__stage = (st) => { setText("runState", `阶梯 ${st}/10 档`); toast(`升到第 ${st} 档`); };
 window.__setMode = (m) => {
@@ -1587,6 +1606,7 @@ function applySettings(s) {
     $("fontWVal").textContent = String(fw);
   }
   document.body.dataset.density = s.density || "standard";
+  renderMenuChips(s);
   if ($("setFill")) $("setFill").checked = s.chartFill !== false;
   if (s.dashboard) {
     try {
@@ -2679,6 +2699,133 @@ function diskRenderResult(r) {
   $("diskResult").innerHTML = html;
   $("diskResSub").textContent = new Date().toLocaleTimeString("zh-CN");
 }
+
+/* ===================== 维护模块：键盘清洁 / 屏幕清洁 / 合盖不休眠 ===================== */
+
+let keyCleanBound = false;
+function keyCleanBind() {
+  if (keyCleanBound) return;
+  keyCleanBound = true;
+  const b = $("btnKeyClean");
+  if (!b) return;
+  b.addEventListener("click", async () => {
+    await call("keyboardClean");
+  });
+}
+
+let screenCleanBound = false;
+function screenCleanBind() {
+  if (screenCleanBound) return;
+  screenCleanBound = true;
+  const b = $("btnScreenClean");
+  if (!b) return;
+  b.addEventListener("click", () => call("screenClean"));
+}
+
+let noSleepOn = false, noSleepBound = false;
+function noSleepOnEnter() {
+  if (!noSleepBound) noSleepBind();
+  noSleepRefresh();
+}
+function noSleepBind() {
+  if (noSleepBound) return;
+  noSleepBound = true;
+  const b = $("btnNoSleep");
+  if (!b) return;
+  b.addEventListener("click", async () => {
+    const target = !noSleepOn;
+    b.disabled = true;
+    b.textContent = "请在弹出的系统窗口输入密码…";
+    const r = await call("noSleepSet", { on: target });
+    b.disabled = false;
+    if (r && r.ok) {
+      noSleepOn = r.enabled;
+      noSleepRender();
+      toast(noSleepOn ? "已开启合盖不休眠" : "已关闭合盖不休眠");
+    } else {
+      toast("操作未完成（可能取消了授权）", true);
+    }
+  });
+}
+async function noSleepRefresh() {
+  const r = await call("noSleepStatus");
+  if (r && r.ok) { noSleepOn = r.enabled; noSleepRender(); }
+}
+function noSleepRender() {
+  $("noSleepSub").textContent = noSleepOn ? "已开启：合盖不会休眠" : "已关闭：合盖正常休眠";
+  const b = $("btnNoSleep");
+  b.textContent = noSleepOn ? "关闭合盖不休眠" : "开启合盖不休眠";
+  if (noSleepOn) b.classList.add("danger"); else b.classList.remove("danger");
+  refreshBadges(true);
+}
+
+/* ---------- 菜单栏 / 控制中心：指标自由组合 ---------- */
+const MENU_METRICS = [
+  { id: "mem", name: "内存" },
+  { id: "cpu", name: "CPU" },
+  { id: "gpu", name: "GPU" },
+  { id: "temp", name: "温度" },
+  { id: "power", name: "功耗" },
+  { id: "fan", name: "风扇" },
+  { id: "disk", name: "磁盘" },
+  { id: "batt", name: "电池" },
+];
+
+function renderMenuChips(s) {
+  if (!s) return;
+  const draw = (boxId, csv, limit, key, hint) => {
+    const box = $(boxId);
+    if (!box) return;
+    const picked = String(csv || "").split(",").filter(Boolean);
+    // 已选的按选择顺序排前面并带上序号，未选的按目录顺序跟在后头
+    const ids = picked.concat(MENU_METRICS.map((m) => m.id).filter((id) => !picked.includes(id)));
+    box.innerHTML = ids.map((id) => {
+      const m = MENU_METRICS.find((x) => x.id === id);
+      if (!m) return "";
+      const idx = picked.indexOf(id);
+      const on = idx >= 0;
+      return `<button class="chip${on ? " on" : ""}" data-id="${id}">${on ? idx + 1 + " · " : ""}${m.name}</button>`;
+    }).join("");
+    box.querySelectorAll(".chip").forEach((el) => {
+      el.onclick = () => {
+        const id = el.dataset.id;
+        let next = String(settings[key] || "").split(",").filter(Boolean);
+        if (next.includes(id)) {
+          if (next.length <= 1) { toast("至少留一项"); return; }
+          next = next.filter((x) => x !== id);
+        } else {
+          if (next.length >= limit) { toast(`${hint}最多选 ${limit} 项，先取消一个`); return; }
+          next.push(id);
+        }
+        call("set", { key, value: next.join(",") }).then((r) => {
+          if (r && r.settings) applySettings(r.settings);
+          toast("菜单栏已更新");
+        });
+      };
+    });
+  };
+  draw("menuTitleChips", s.menuTitle, 3, "menuTitle", "标题");
+  draw("menuRowChips", s.menuRows, 5, "menuRows", "面板");
+
+  const sw = $("setMenuBar");
+  if (sw) sw.checked = s.menuBar !== false;
+}
+
+function menuMetricsBind() {
+  const sw = $("setMenuBar");
+  if (sw) {
+    sw.onchange = (e) => call("set", { key: "menuBar", value: e.target.checked })
+      .then((r) => r && r.settings && applySettings(r.settings));
+  }
+  const cc = $("btnOpenCC");
+  if (cc) {
+    cc.onclick = () => call("openControlCenter").then(() => {
+      toast("控制中心右上角「编辑控制」里就能加");
+    });
+  }
+  if (settings) renderMenuChips(settings);
+}
+menuMetricsBind();
 
 
 boot();

@@ -20,7 +20,9 @@ func shell(_ path: String, _ args: [String]) -> String {
     let pipe = Pipe()
     p.standardOutput = pipe
     p.standardError = Pipe()
-    try? p.run()
+    // run 失败（路径错 / 无权限）时直接返回空串，绝不能继续 readDataToEndOfFile()——
+    // 否则子进程没起来、写端无人关闭，read 会永久阻塞，把主线程卡死。
+    do { try p.run() } catch { return "" }
     let data = pipe.fileHandleForReading.readDataToEndOfFile()
     p.waitUntilExit()
     return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -279,7 +281,13 @@ final class Settings {
         static let fontWeight = "fontWeight"
         static let wallColor = "wallColor"
         static let history = "history"
+        static let menuTitle = "menuTitle"
+        static let menuRows = "menuRows"
+        static let menuBar = "menuBar"
     }
+
+    /// 菜单栏标题与面板行可选的全部指标（顺序即展示顺序）
+    static let metricIDs = ["mem", "cpu", "gpu", "temp", "power", "fan", "disk", "batt"]
 
     var theme: String { ud.string(forKey: K.theme) ?? "auto" }
     var fuse: Bool { ud.object(forKey: K.fuse) == nil ? true : ud.bool(forKey: K.fuse) }
@@ -300,6 +308,31 @@ final class Settings {
     var chartLine: Double { ud.object(forKey: K.chartLine) == nil ? 1.6 : ud.double(forKey: K.chartLine) }
     var lang: String { ud.string(forKey: K.lang) ?? "auto" }
     var fontSize: Int { ud.object(forKey: K.fontSize) == nil ? 13 : ud.integer(forKey: K.fontSize) }
+
+    // 菜单栏图标标题显示哪些指标（逗号分隔，最多 3 个）
+    var menuTitle: String {
+        normalizeMetrics(ud.string(forKey: K.menuTitle) ?? "temp,mem", max: 3, fallback: "temp,mem")
+    }
+    // 菜单栏下拉面板里显示哪些指标行（逗号分隔，最多 5 个）
+    var menuRows: String {
+        normalizeMetrics(ud.string(forKey: K.menuRows) ?? "mem,cpu,gpu", max: 5, fallback: "mem,cpu,gpu")
+    }
+    // 是否常驻菜单栏图标
+    var menuBar: Bool { ud.object(forKey: K.menuBar) == nil ? true : ud.bool(forKey: K.menuBar) }
+
+    /// 只保留白名单内的指标、去重、限长；全空时回落到默认组合
+    private func normalizeMetrics(_ raw: String, max limit: Int, fallback: String) -> String {
+        var seen = Set<String>()
+        var out: [String] = []
+        for part in raw.split(separator: ",") {
+            let id = part.trimmingCharacters(in: .whitespaces).lowercased()
+            guard Settings.metricIDs.contains(id), !seen.contains(id) else { continue }
+            seen.insert(id)
+            out.append(id)
+            if out.count >= limit { break }
+        }
+        return out.isEmpty ? fallback : out.joined(separator: ",")
+    }
     // 字体粗细 300~700（步长 10），越界或非法值回落到 400
     var fontWeight: Int {
         let v = ud.object(forKey: K.fontWeight) == nil ? 400 : ud.integer(forKey: K.fontWeight)
@@ -336,7 +369,24 @@ final class Settings {
             "chartFill": K.chartFill, "chartLine": K.chartLine,
             "lang": K.lang, "fontSize": K.fontSize,
             "fontWeight": K.fontWeight, "wallColor": K.wallColor,
+            "menuTitle": K.menuTitle, "menuRows": K.menuRows, "menuBar": K.menuBar,
         ]
+        // 菜单栏指标组合：白名单校验后再落盘，顺序与去重由 normalizeMetrics 保证
+        if key == "menuTitle" || key == "menuRows" {
+            let raw = String(describing: value)
+            let isTitle = key == "menuTitle"
+            let clean = normalizeMetrics(raw, max: isTitle ? 3 : 5,
+                                         fallback: isTitle ? "temp,mem" : "mem,cpu,gpu")
+            ud.set(clean, forKey: isTitle ? K.menuTitle : K.menuRows)
+            StatusBarController.shared.reload()
+            return
+        }
+        if key == "menuBar" {
+            let on = (value as? Bool) ?? (String(describing: value) == "true" || String(describing: value) == "1")
+            ud.set(on, forKey: K.menuBar)
+            StatusBarController.shared.reload()
+            return
+        }
         // 壁纸色先做校验再落盘，避免把非法字符串写进 UserDefaults
         if key == "wallColor" {
             let hex = String(describing: value).uppercased()
@@ -385,6 +435,7 @@ final class Settings {
         "density":"\(density)","sideWidth":\(sideWidth),"radius":\(radius),\
         "chartFill":\(chartFill),"chartLine":\(chartLine),"lang":"\(lang)","fontSize":\(fontSize),\
         "fontWeight":\(fontWeight),"wallColor":"\(wallColor)",\
+        "menuTitle":"\(menuTitle)","menuRows":"\(menuRows)","menuBar":\(menuBar),\
         "dashboard":"\(jsonEscape(dashboard))","dark":\(isDark())}
         """
     }
@@ -1168,6 +1219,11 @@ final class MainController: NSViewController, WKScriptMessageHandler {
                 if a.hasPrefix("mode:") {
                     let m = String(a.dropFirst(5))
                     self?.eval("window.__setMode && window.__setMode('\(m)')")
+                } else if a.hasPrefix("nav:") {
+                    // 控制中心 / URL scheme 唤起的模块跳转
+                    let target = String(a.dropFirst(4))
+                    self?.view.window?.makeKeyAndOrderFront(nil)
+                    self?.eval("window.__nav && window.__nav('\(target)')")
                 }
             }
         }
@@ -1301,6 +1357,9 @@ final class MainController: NSViewController, WKScriptMessageHandler {
             Settings.shared.set("fontSize", 13)
             Settings.shared.set("fontWeight", 400)
             Settings.shared.set("wallColor", "#2C6BED")
+            Settings.shared.set("menuTitle", "temp,mem")
+            Settings.shared.set("menuRows", "mem,cpu,gpu")
+            Settings.shared.set("menuBar", true)
             Metrics.shared.restart()
             notice(id, "{\"ok\":true,\"settings\":\(Settings.shared.json)}")
 
@@ -1507,6 +1566,32 @@ final class MainController: NSViewController, WKScriptMessageHandler {
                 DispatchQueue.main.async { self.notice(id, r) }
             }
 
+        // MARK: 维护：键盘清洁 / 屏幕清洁 / 合盖不休眠
+        case "keyboardClean":
+            // code: 0 = 已进入，1 = 需要辅助功能权限
+            let code = CleanMode.shared.startKeyboard()
+            notice(id, "{\"ok\":true,\"code\":\(code)}")
+
+        case "screenClean":
+            CleanMode.shared.startScreen()
+            notice(id, "{\"ok\":true}")
+
+        case "openControlCenter":
+            Toolbox.openControlCenterSettings()
+            notice(id, "{\"ok\":true}")
+
+        case "noSleepStatus":
+            notice(id, "{\"ok\":true,\"enabled\":\(NoSleep.shared.isEnabled())}")
+
+        case "noSleepSet":
+            let on = body["on"] as? Bool ?? false
+            DispatchQueue.global(qos: .userInitiated).async {
+                let ok = NoSleep.shared.set(on)
+                DispatchQueue.main.async {
+                    self.notice(id, "{\"ok\":\(ok),\"enabled\":\(NoSleep.shared.isEnabled())}")
+                }
+            }
+
         default:
             notice(id, "{\"ok\":false}")
         }
@@ -1620,6 +1705,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// 主窗口必须由 delegate 持有：窗口被 KVO 观察（透明标题栏 / 自动保存 frame），
     /// 仅靠局部变量 + releasedWhenClosed 会在关闭时被多释放一次，导致退出瞬间 SIGSEGV。
     private var mainWindow: NSWindow?
+    /// 启动过程中收到的外部动作，等窗口就绪再执行
+    static var pendingAction: ToolboxAction?
+    private var launched = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
@@ -1648,6 +1736,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         StatusBarController.shared.install()
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
 
+        // 冷启动时由控制中心 / URL scheme 带进来的动作，等页面就绪后再执行
+        launched = true
+        if let pending = AppDelegate.pendingAction {
+            AppDelegate.pendingAction = nil
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { Toolbox.run(pending) }
+        }
+
         // 调试钩子：ROAST_AUTOSTART=1 时启动即自动开烤
         if ProcessInfo.processInfo.environment["ROAST_AUTOSTART"] == "1" {
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
@@ -1670,6 +1765,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+
+    /// mactoolbox://screen|keyboard|nosleep —— 控制中心控制项与小组件按钮都从这里进来
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for u in urls {
+            let key = (u.host ?? u.path.replacingOccurrences(of: "/", with: "")).lowercased()
+            let action = ToolboxAction(rawValue: key) ?? .show
+            if launched {
+                Toolbox.run(action)
+            } else {
+                AppDelegate.pendingAction = action
+            }
+        }
+    }
 
     private func buildMenu() {
         let menu = NSMenu()

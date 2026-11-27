@@ -380,6 +380,61 @@
   </section>
 </template>
 
+<!-- 键盘清洁 -->
+<template id="tpl-keyclean">
+  <section class="card">
+    <div class="card-hd"><div><div class="card-t">键盘清洁</div><div class="card-sub">锁住键盘，放心擦拭键帽与缝隙</div></div></div>
+    <div class="card-bd">
+      <div class="clean-hero">
+        <div class="clean-ico">⌨</div>
+        <div class="clean-d"><b>进入后键盘会锁定</b>，按任何键都不会响应，可以放心用布擦拭键帽和缝隙。擦完按 <b>Esc</b> 或点击屏幕退出。</div>
+      </div>
+      <div class="diag-warn" id="kbWarn" hidden>
+        <b>正在进入…</b>
+      </div>
+      <div class="clean-actions">
+        <button class="btn primary full" id="btnKeyClean">进入键盘清洁</button>
+      </div>
+      <div class="clean-note">不需要辅助功能授权了：遮罩窗口自己就是键盘焦点，按键不会再传给别的 App。若之前授过权，连系统级快捷键也会一起吞掉。</div>
+    </div>
+  </section>
+</template>
+
+<!-- 屏幕清洁 -->
+<template id="tpl-screenclean">
+  <section class="card">
+    <div class="card-hd"><div><div class="card-t">屏幕清洁</div><div class="card-sub">纯色背景，看清灰尘与污渍</div></div></div>
+    <div class="card-bd">
+      <div class="clean-hero">
+        <div class="clean-ico">◉</div>
+        <div class="clean-d"><b>进入后整块屏幕变深色</b>，灰尘、指纹、污渍一目了然。擦完按 <b>任意键</b> 或点击屏幕退出。</div>
+      </div>
+      <div class="clean-actions">
+        <button class="btn primary full" id="btnScreenClean">进入屏幕清洁</button>
+      </div>
+    </div>
+  </section>
+</template>
+
+<!-- 合盖不休眠 -->
+<template id="tpl-nosleep">
+  <section class="card">
+    <div class="card-hd"><div><div class="card-t">合盖不休眠</div><div class="card-sub" id="noSleepSub">正在读取状态…</div></div></div>
+    <div class="card-bd">
+      <div class="clean-hero">
+        <div class="clean-ico">☾</div>
+        <div class="clean-d"><b>开启后合上盖子电脑也不休眠</b>（电池供电下同样有效），适合带着电脑移动、跑长任务时用。</div>
+      </div>
+      <div class="diag-warn">
+        <b>注意</b>：此功能会关闭整机休眠，需要输入管理员密码。用完记得关掉，否则合盖放包里会一直耗电、发烫。
+      </div>
+      <div class="clean-actions">
+        <button class="btn primary full" id="btnNoSleep">开启合盖不休眠</button>
+      </div>
+    </div>
+  </section>
+</template>
+
 <!-- 设置 -->
 <template id="tpl-settings">
   <div class="grid-2">
@@ -552,6 +607,29 @@
           <div class="row-label">恢复默认设置</div>
           <button class="btn ghost tiny" id="btnReset">恢复</button>
         </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-hd"><div><div class="card-t">菜单栏与控制中心</div><div class="card-sub">下拉就能看到的那些数据，自己挑</div></div></div>
+      <div class="card-bd">
+        <div class="row">
+          <div class="row-label">常驻菜单栏<span class="row-sub">关掉后只剩控制中心入口</span></div>
+          <input type="checkbox" class="sw" id="setMenuBar">
+        </div>
+        <div class="row col">
+          <div class="row-label">菜单栏标题<span class="row-sub">勾选顺序就是显示顺序，最多 3 项</span></div>
+          <div class="chips" id="menuTitleChips"></div>
+        </div>
+        <div class="row col">
+          <div class="row-label">下拉面板的数据行<span class="row-sub">每行带进度条，最多 5 项</span></div>
+          <div class="chips" id="menuRowChips"></div>
+        </div>
+        <div class="row">
+          <div class="row-label">控制中心<span class="row-sub">屏幕清洁 / 键盘清洁 / 合盖不休眠 / 内存</span></div>
+          <button class="btn ghost tiny" id="btnOpenCC">去添加</button>
+        </div>
+        <div class="clean-note">这四个控制项要手动加一次：点开控制中心 → 最下面「编辑控制」→ 找到「Mac 工具箱」拖进来。之后一下拉就看得见内存占用。</div>
       </div>
     </section>
   </div>
