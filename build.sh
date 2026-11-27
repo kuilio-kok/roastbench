@@ -11,8 +11,8 @@ APP_ID="cn.wangchuanhe.roastbench"
 WIDGET_ID="$APP_ID.widget"
 WIDGET_NAME="ToolboxWidget"
 APPEX="$BUNDLE/Contents/PlugIns/$WIDGET_NAME.appex"
-VERSION="3.4"
-BUILD_NO="34"
+VERSION="3.5"
+BUILD_NO="35"
 
 rm -rf "$BUNDLE" build
 mkdir -p build "$BUNDLE/Contents/MacOS" "$BUNDLE/Contents/Resources/ui" "$BUNDLE/Contents/PlugIns"
@@ -23,10 +23,10 @@ APP_SRC=(src/main.swift src/Icon.swift src/StatusBar.swift src/HUD.swift src/Too
 WIDGET_SRC=(src/widget/MemProbe.swift src/widget/Snapshot.swift src/ToolboxIntents.swift src/widget/Widgets.swift)
 
 echo "▶ 编译主程序 arm64"
-swiftc -O -target arm64-apple-macos14.0 -framework AppIntents -o build/app_arm64 $APP_SRC
+swiftc -O -target arm64-apple-macos14.0 -framework AppIntents -framework WidgetKit -o build/app_arm64 $APP_SRC
 
 echo "▶ 编译主程序 x86_64"
-swiftc -O -target x86_64-apple-macos14.0 -framework AppIntents -o build/app_x86_64 $APP_SRC
+swiftc -O -target x86_64-apple-macos14.0 -framework AppIntents -framework WidgetKit -o build/app_x86_64 $APP_SRC
 
 echo "▶ 合并通用二进制"
 lipo -create -output "$BUNDLE/Contents/MacOS/$EXEC" build/app_arm64 build/app_x86_64

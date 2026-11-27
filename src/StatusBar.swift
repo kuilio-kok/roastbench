@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import WidgetKit
 
 /// 菜单栏常驻：标题指标与面板数据行都可自由组合，另带常用操作入口
 final class StatusBarController: NSObject {
@@ -435,6 +436,9 @@ final class StatusWidgetView: NSView {
 /// 主 App 是「非沙盒」，可以直接把数据写进扩展自己的沙盒容器；
 /// 扩展（沙盒进程）从自己容器里读，不用 App Group、不用证书。
 enum WidgetSnapshot {
+    /// 上次主动让小组件刷新的时间：太频繁会被系统砍掉预算
+    private static var lastReload = Date.distantPast
+
     static func write(_ s: Metrics.Sample) {
         let fm = FileManager.default
         // 扩展还没被系统加载过时容器不存在，这时候别往里塞东西
@@ -459,6 +463,11 @@ enum WidgetSnapshot {
             "b": pct, "p": src,
         ]
         guard let data = try? JSONSerialization.data(withJSONObject: json) else { return }
+        // 每 4 分钟推一次重载，小组件不用干等着自己的 1 分钟节奏
+        if Date().timeIntervalSince(lastReload) > 240 {
+            lastReload = Date()
+            WidgetCenter.shared.reloadAllTimelines()
+        }
         // 先写临时文件再换名，避免小组件读到写了一半的 JSON
         let tmp = dir.appendingPathComponent(".widget-snapshot.tmp")
         do {
