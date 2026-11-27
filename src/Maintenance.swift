@@ -45,6 +45,7 @@ enum ToolboxAction: String {
 enum Toolbox {
     /// 统一执行入口：控制中心按钮、菜单栏、URL scheme 都走这里
     static func run(_ action: ToolboxAction) {
+        debugAppend("run action=\(action.rawValue)")
         DispatchQueue.main.async {
             NSApp.activate(ignoringOtherApps: true)
             switch action {

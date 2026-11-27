@@ -29,6 +29,23 @@ func shell(_ path: String, _ args: [String]) -> String {
     return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 }
 
+/// 调试日志：App 是被 open 拉起来的，stdout 看不到，所以落到文件里
+func debugAppend(_ msg: String) {
+    guard let dir = try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
+                                                 appropriateFor: nil, create: true) else { return }
+    let sub = dir.appendingPathComponent("Mac 工具箱")
+    try? FileManager.default.createDirectory(at: sub, withIntermediateDirectories: true)
+    let f = sub.appendingPathComponent("url-events.log")
+    let line = "\(Date()) \(msg)\n"
+    if let h = try? FileHandle(forWritingTo: f) {
+        h.seekToEndOfFile()
+        h.write(line.data(using: .utf8) ?? Data())
+        try? h.close()
+    } else {
+        try? line.write(to: f, atomically: true, encoding: .utf8)
+    }
+}
+
 func sysctlString(_ key: String) -> String {
     shell("/usr/sbin/sysctl", ["-n", key])
 }
@@ -1824,6 +1841,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// mactoolbox://screen|keyboard|nosleep —— 控制中心控制项与小组件按钮都从这里进来
     func application(_ application: NSApplication, open urls: [URL]) {
         for u in urls {
+            debugAppend("open url=\(u.absoluteString)")
             let key = (u.host ?? u.path.replacingOccurrences(of: "/", with: "")).lowercased()
             let action = ToolboxAction(rawValue: key) ?? .show
             if launched {
