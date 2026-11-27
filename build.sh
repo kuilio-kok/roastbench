@@ -11,8 +11,8 @@ APP_ID="cn.wangchuanhe.roastbench"
 WIDGET_ID="$APP_ID.widget"
 WIDGET_NAME="ToolboxWidget"
 APPEX="$BUNDLE/Contents/PlugIns/$WIDGET_NAME.appex"
-VERSION="3.5"
-BUILD_NO="35"
+VERSION="3.6"
+BUILD_NO="36"
 
 rm -rf "$BUNDLE" build
 mkdir -p build "$BUNDLE/Contents/MacOS" "$BUNDLE/Contents/Resources/ui" "$BUNDLE/Contents/PlugIns"

@@ -111,38 +111,49 @@ struct Facts {
     }
 }
 
-// MARK: - 小组件：指标可自由组合
+extension Facts {
+    static func preview() -> Facts {
+        var f = Facts()
+        f.memUsed = 23.2e9; f.memTotal = 34.4e9
+        f.swapUsed = 0.65e9; f.swapTotal = 2.1e9
+        f.cpu = 22; f.gpu = 18
+        f.temp = 52; f.power = 12; f.fan = 1500; f.battery = 87
+        f.hasThermal = true
+        return f
+    }
+}
 
-struct MetricsOptions: WidgetConfigurationIntent {
-    static var title: LocalizedStringResource = "指标组合"
-    static var description = IntentDescription("挑想看的几项，随时改")
+// MARK: - 小组件：三个预设（静态配置）
+// 为什么不用 AppIntentConfiguration：带可配置参数的小组件需要 Xcode 生成的
+// App Intents 元数据，纯命令行环境生成不了，系统会实例化失败 —— 表现就是
+// 加进去一片空白、timeline 一次都不被调用。静态配置不吃元数据，稳。
 
-    @Parameter(title: "已用 / 总容量", default: true)
-    var memUsed: Bool
+/// 扩展侧日志：写到自己的容器里，出问题能直接看
+enum WidgetDebug {
+    static func log(_ msg: String) {
+        let path = NSHomeDirectory() + "/Library/Application Support/widget-debug.log"
+        let line = "\(Date()) \(msg)\n"
+        if let h = FileHandle(forWritingAtPath: path) {
+            h.seekToEndOfFile()
+            h.write(line.data(using: .utf8) ?? Data())
+            h.closeFile()
+        } else {
+            try? line.write(toFile: path, atomically: true, encoding: .utf8)
+        }
+    }
+}
 
-    @Parameter(title: "可用容量", default: false)
-    var memAvailable: Bool
+enum Preset: String {
+    case mem, core, thermal
 
-    @Parameter(title: "交换空间", default: false)
-    var swap: Bool
-
-    @Parameter(title: "CPU 占用", default: true)
-    var cpu: Bool
-
-    @Parameter(title: "GPU 占用", default: false)
-    var gpu: Bool
-
-    @Parameter(title: "CPU 温度", default: true)
-    var temp: Bool
-
-    @Parameter(title: "整机功耗", default: true)
-    var power: Bool
-
-    @Parameter(title: "风扇转速", default: false)
-    var fan: Bool
-
-    @Parameter(title: "电池电量", default: false)
-    var battery: Bool
+    /// 每一项都要展示哪些指标，顺序即显示顺序
+    var ids: [String] {
+        switch self {
+        case .mem:     return ["used"]
+        case .core:    return ["used", "cpu", "temp", "power", "swap"]
+        case .thermal: return ["temp", "power", "fan", "batt", "gpu"]
+        }
+    }
 }
 
 struct MetricsEntry: TimelineEntry {
@@ -159,88 +170,102 @@ struct MetricsEntry: TimelineEntry {
     let usedText: String
     let items: [Item]
     let hasThermal: Bool
-    /// 内存压力等级：normal / warn / critical，决定配色
-    var level: Int {
-        percent > 0.85 ? 2 : (percent > 0.7 ? 1 : 0)
+
+    /// 内存水位：0 正常 / 1 偏高 / 2 吃紧，决定配色
+    var level: Int { percent > 0.85 ? 2 : (percent > 0.7 ? 1 : 0) }
+}
+
+enum EntryBuilder {
+    static func build(preset: Preset, preview: Bool = false) -> MetricsEntry {
+        let f = preview ? Facts.preview() : Facts.current()
+        var items: [MetricsEntry.Item] = []
+
+        for id in preset.ids {
+            switch id {
+            case "used":
+                guard f.memTotal > 0 else { continue }
+                items.append(.init(id: "used", label: "已用",
+                                   value: String(format: "%.1f / %.0f GB", f.memUsed / 1e9, f.memTotal / 1e9),
+                                   percent: nil, icon: "internaldrive"))
+            case "free":
+                items.append(.init(id: "free", label: "可用",
+                                   value: String(format: "%.1f GB", f.memAvailable / 1e9),
+                                   percent: nil, icon: "square.stack.3d.up"))
+            case "cpu":
+                items.append(.init(id: "cpu", label: "CPU",
+                                   value: String(format: "%.0f%%", f.cpu),
+                                   percent: min(max(f.cpu / 100, 0), 1), icon: "cpu"))
+            case "gpu":
+                guard f.hasThermal else { continue }   // GPU 占用同样来自快照
+                items.append(.init(id: "gpu", label: "GPU",
+                                   value: String(format: "%.0f%%", f.gpu),
+                                   percent: min(max(f.gpu / 100, 0), 1), icon: "cpu.fill"))
+            case "swap":
+                items.append(.init(id: "swap", label: "交换",
+                                   value: String(format: "%.2f GB", f.swapUsed / 1e9),
+                                   percent: f.swapTotal > 0 ? min(f.swapUsed / f.swapTotal, 1) : nil,
+                                   icon: "arrow.left.arrow.right"))
+            case "temp":
+                guard f.hasThermal else { continue }
+                items.append(.init(id: "temp", label: "温度",
+                                   value: String(format: "%.0f°C", f.temp),
+                                   percent: min(max((f.temp - 30) / 75, 0), 1), icon: "thermometer.medium"))
+            case "power":
+                guard f.hasThermal else { continue }
+                items.append(.init(id: "power", label: "功耗",
+                                   value: String(format: "%.0f W", f.power),
+                                   percent: min(max(f.power / 60, 0), 1), icon: "bolt"))
+            case "fan":
+                guard f.hasThermal else { continue }
+                items.append(.init(id: "fan", label: "风扇",
+                                   value: String(format: "%.0f rpm", f.fan),
+                                   percent: min(max(f.fan / 6000, 0), 1), icon: "fanblades"))
+            case "batt":
+                guard f.battery > 0 else { continue }
+                items.append(.init(id: "batt", label: "电池",
+                                   value: String(format: "%.0f%%", f.battery),
+                                   percent: min(max(f.battery / 100, 0), 1), icon: "battery.75"))
+            default:
+                continue
+            }
+        }
+
+        return MetricsEntry(date: Date(),
+                            percent: f.memPercent,
+                            usedText: String(format: "%.1f / %.0f GB", f.memUsed / 1e9, f.memTotal / 1e9),
+                            items: items,
+                            hasThermal: f.hasThermal)
     }
 }
 
-struct MetricsProvider: AppIntentTimelineProvider {
+struct PresetProvider: TimelineProvider {
+    let preset: Preset
+
     func placeholder(in context: Context) -> MetricsEntry {
-        make(percent: 0.62, used: "20.1 / 34 GB", items: [
-            .init(id: "cpu", label: "CPU", value: "18%", percent: 0.18, icon: "cpu"),
-            .init(id: "temp", label: "温度", value: "52°C", percent: nil, icon: "thermometer.medium"),
-        ], thermal: true)
+        EntryBuilder.build(preset: preset, preview: true)
     }
 
-    func snapshot(for configuration: MetricsOptions, in context: Context) async -> MetricsEntry {
-        entry(for: configuration)
+    func getSnapshot(in context: Context, completion: @escaping (MetricsEntry) -> Void) {
+        completion(EntryBuilder.build(preset: preset, preview: context.isPreview))
     }
 
-    func timeline(for configuration: MetricsOptions, in context: Context) async -> Timeline<MetricsEntry> {
-        // 一分钟一次；系统会按自己的预算合并，主 App 那边也会推重载
-        Timeline(entries: [entry(for: configuration)], policy: .after(Date().addingTimeInterval(60)))
+    func getTimeline(in context: Context, completion: @escaping (Timeline<MetricsEntry>) -> Void) {
+        let e = EntryBuilder.build(preset: preset)
+        WidgetDebug.log("timeline \(preset.rawValue) family=\(context.family.rawValue) pct=\(e.percent) items=\(e.items.count) thermal=\(e.hasThermal)")
+        // 一分钟一次；系统会按预算合并，主 App 也会主动推重载
+        completion(Timeline(entries: [e], policy: .after(Date().addingTimeInterval(60))))
     }
+}
 
-    private func make(percent: Double, used: String, items: [MetricsEntry.Item], thermal: Bool) -> MetricsEntry {
-        MetricsEntry(date: Date(), percent: percent, usedText: used, items: items, hasThermal: thermal)
-    }
-
-    private func entry(for c: MetricsOptions) -> MetricsEntry {
-        let f = Facts.current()
-        var items: [MetricsEntry.Item] = []
-
-        if c.memUsed {
-            items.append(.init(id: "used", label: "已用",
-                               value: String(format: "%.1f / %.0f GB", f.memUsed / 1e9, f.memTotal / 1e9),
-                               percent: nil, icon: "internaldrive"))
+extension View {
+    func toolboxWidgetBackground(_ entry: MetricsEntry) -> some View {
+        containerBackground(for: .widget) {
+            ZStack {
+                Rectangle().fill(.fill.tertiary)
+                LinearGradient(colors: [Color.level(entry.level).opacity(0.16), .clear],
+                               startPoint: .topLeading, endPoint: .bottomTrailing)
+            }
         }
-        if c.memAvailable {
-            items.append(.init(id: "free", label: "可用",
-                               value: String(format: "%.1f GB", f.memAvailable / 1e9),
-                               percent: nil, icon: "square.stack.3d.up"))
-        }
-        if c.cpu {
-            items.append(.init(id: "cpu", label: "CPU",
-                               value: String(format: "%.0f%%", f.cpu),
-                               percent: min(max(f.cpu / 100, 0), 1), icon: "cpu"))
-        }
-        if c.gpu {
-            items.append(.init(id: "gpu", label: "GPU",
-                               value: String(format: "%.0f%%", f.gpu),
-                               percent: min(max(f.gpu / 100, 0), 1), icon: "cpu.fill"))
-        }
-        if c.swap {
-            items.append(.init(id: "swap", label: "交换",
-                               value: String(format: "%.2f GB", f.swapUsed / 1e9),
-                               percent: f.swapTotal > 0 ? min(f.swapUsed / f.swapTotal, 1) : nil,
-                               icon: "arrow.left.arrow.right"))
-        }
-        if c.temp && f.hasThermal {
-            items.append(.init(id: "temp", label: "温度",
-                               value: String(format: "%.0f°C", f.temp),
-                               percent: min(max((f.temp - 30) / 75, 0), 1), icon: "thermometer.medium"))
-        }
-        if c.power && f.hasThermal {
-            items.append(.init(id: "power", label: "功耗",
-                               value: String(format: "%.0f W", f.power),
-                               percent: min(max(f.power / 60, 0), 1), icon: "bolt"))
-        }
-        if c.fan && f.hasThermal {
-            items.append(.init(id: "fan", label: "风扇",
-                               value: String(format: "%.0f rpm", f.fan),
-                               percent: min(max(f.fan / 6000, 0), 1), icon: "fanblades"))
-        }
-        if c.battery {
-            items.append(.init(id: "batt", label: "电池",
-                               value: String(format: "%.0f%%", f.battery),
-                               percent: min(max(f.battery / 100, 0), 1), icon: "battery.75"))
-        }
-
-        return make(percent: f.memPercent,
-                    used: String(format: "%.1f / %.0f GB", f.memUsed / 1e9, f.memTotal / 1e9),
-                    items: items,
-                    thermal: f.hasThermal)
     }
 }
 
@@ -523,22 +548,40 @@ struct MetricsWidgetView: View {
     }
 }
 
-struct MetricsWidget: Widget {
+// MARK: - 三个静态小组件
+
+struct MemWidget: Widget {
     var body: some WidgetConfiguration {
-        AppIntentConfiguration(kind: "cn.wangchuanhe.toolbox.widget.metrics",
-                               intent: MetricsOptions.self,
-                               provider: MetricsProvider()) { entry in
-            MetricsWidgetView(entry: entry)
-                .containerBackground(for: .widget) {
-                    ZStack {
-                        Rectangle().fill(.fill.tertiary)
-                        LinearGradient(colors: [Color.level(entry.level).opacity(0.16), .clear],
-                                       startPoint: .topLeading, endPoint: .bottomTrailing)
-                    }
-                }
+        StaticConfiguration(kind: "cn.wangchuanhe.toolbox.widget.mem",
+                            provider: PresetProvider(preset: .mem)) { entry in
+            MetricsWidgetView(entry: entry).toolboxWidgetBackground(entry)
+        }
+        .configurationDisplayName("内存")
+        .description("只看内存占用，一划就到")
+        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+    }
+}
+
+struct CoreWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "cn.wangchuanhe.toolbox.widget.core",
+                            provider: PresetProvider(preset: .core)) { entry in
+            MetricsWidgetView(entry: entry).toolboxWidgetBackground(entry)
         }
         .configurationDisplayName("内存与占用")
-        .description("内存占用一眼看清，CPU、温度、功耗自己挑")
+        .description("内存 + CPU + 温度 + 功耗")
+        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+    }
+}
+
+struct ThermalWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "cn.wangchuanhe.toolbox.widget.thermal",
+                            provider: PresetProvider(preset: .thermal)) { entry in
+            MetricsWidgetView(entry: entry).toolboxWidgetBackground(entry)
+        }
+        .configurationDisplayName("温度与功耗")
+        .description("温度、功耗、风扇、电池")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     }
 }
@@ -549,7 +592,9 @@ struct MetricsWidget: Widget {
 @main
 struct ToolboxWidgets: WidgetBundle {
     var body: some Widget {
-        MetricsWidget()
+        MemWidget()
+        CoreWidget()
+        ThermalWidget()
         MemControl()
         ScreenCleanControl()
         KeyboardCleanControl()

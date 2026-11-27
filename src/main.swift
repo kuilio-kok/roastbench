@@ -10,6 +10,7 @@ import ServiceManagement
 import UserNotifications
 import Darwin
 import UniformTypeIdentifiers
+import WidgetKit
 
 // MARK: - 小工具
 
@@ -1757,6 +1758,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let pending = AppDelegate.pendingAction {
             AppDelegate.pendingAction = nil
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { Toolbox.run(pending) }
+        }
+
+        // 调试：看看系统里到底登记了哪些小组件实例
+        WidgetCenter.shared.getCurrentConfigurations { result in
+            switch result {
+            case .success(let infos):
+                if infos.isEmpty { print("[widget] 系统里没有任何小组件实例") }
+                for i in infos {
+                    print("[widget] kind=\(i.kind) family=\(i.family.rawValue)")
+                }
+            case .failure(let e):
+                print("[widget] 读取配置失败：\(e)")
+            }
         }
 
         // 调试钩子：ROAST_AUTOSTART=1 时启动即自动开烤
