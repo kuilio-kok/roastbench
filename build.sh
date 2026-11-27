@@ -11,16 +11,16 @@ APP_ID="cn.wangchuanhe.roastbench"
 WIDGET_ID="$APP_ID.widget"
 WIDGET_NAME="ToolboxWidget"
 APPEX="$BUNDLE/Contents/PlugIns/$WIDGET_NAME.appex"
-VERSION="3.6"
-BUILD_NO="36"
+VERSION="3.7"
+BUILD_NO="37"
 
 rm -rf "$BUNDLE" build
 mkdir -p build "$BUNDLE/Contents/MacOS" "$BUNDLE/Contents/Resources/ui" "$BUNDLE/Contents/PlugIns"
 mkdir -p "$APPEX/Contents/MacOS"
 
-APP_SRC=(src/main.swift src/Icon.swift src/StatusBar.swift src/HUD.swift src/ToolboxIntents.swift src/Inspect.swift src/Cleaners.swift src/Maintenance.swift src/widget/Snapshot.swift)
+APP_SRC=(src/main.swift src/Icon.swift src/StatusBar.swift src/HUD.swift src/Inspect.swift src/Cleaners.swift src/Maintenance.swift src/widget/Snapshot.swift)
 # 扩展和主 App 共用 Snapshot.swift：宿主按同一份路径规则写快照，扩展读自己容器
-WIDGET_SRC=(src/widget/MemProbe.swift src/widget/Snapshot.swift src/ToolboxIntents.swift src/widget/Widgets.swift)
+WIDGET_SRC=(src/widget/MemProbe.swift src/widget/Snapshot.swift src/widget/Widgets.swift)
 
 echo "▶ 编译主程序 arm64"
 swiftc -O -target arm64-apple-macos14.0 -framework AppIntents -framework WidgetKit -o build/app_arm64 $APP_SRC

@@ -5,10 +5,14 @@ import AppKit
 
 // MARK: - 控制中心控制项
 
+private func toolboxURL(_ path: String) -> URL {
+    URL(string: "mactoolbox://\(path)") ?? URL(string: "mactoolbox://show")!
+}
+
 struct ScreenCleanControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(kind: "cn.wangchuanhe.toolbox.control.screen") {
-            ControlWidgetButton(action: ScreenCleanIntent()) {
+            ControlWidgetButton(action: OpenURLIntent(toolboxURL("screen"))) {
                 Label("屏幕清洁", systemImage: "sparkles")
             }
         }
@@ -20,7 +24,7 @@ struct ScreenCleanControl: ControlWidget {
 struct KeyboardCleanControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(kind: "cn.wangchuanhe.toolbox.control.keyboard") {
-            ControlWidgetButton(action: KeyboardCleanIntent()) {
+            ControlWidgetButton(action: OpenURLIntent(toolboxURL("keyboard"))) {
                 Label("键盘清洁", systemImage: "keyboard")
             }
         }
@@ -32,7 +36,7 @@ struct KeyboardCleanControl: ControlWidget {
 struct NoSleepControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(kind: "cn.wangchuanhe.toolbox.control.nosleep") {
-            ControlWidgetButton(action: NoSleepIntent()) {
+            ControlWidgetButton(action: OpenURLIntent(toolboxURL("nosleep"))) {
                 Label("合盖不休眠", systemImage: "moon.zzz")
             }
         }
@@ -63,7 +67,7 @@ struct MemControl: ControlWidget {
         // 下拉控制中心看到的就是最新数字。
         StaticControlConfiguration(kind: "cn.wangchuanhe.toolbox.control.mem",
                                    provider: MemValueProvider()) { value in
-            ControlWidgetButton(action: DashboardIntent()) {
+            ControlWidgetButton(action: OpenURLIntent(toolboxURL("show"))) {
                 Label("内存 \(value.text)", systemImage: "memorychip")
             }
         }
@@ -554,7 +558,9 @@ struct MemWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "cn.wangchuanhe.toolbox.widget.mem",
                             provider: PresetProvider(preset: .mem)) { entry in
-            MetricsWidgetView(entry: entry).toolboxWidgetBackground(entry)
+            MetricsWidgetView(entry: entry)
+                .toolboxWidgetBackground(entry)
+                .widgetURL(toolboxURL("show"))
         }
         .configurationDisplayName("内存")
         .description("只看内存占用，一划就到")
@@ -566,7 +572,9 @@ struct CoreWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "cn.wangchuanhe.toolbox.widget.core",
                             provider: PresetProvider(preset: .core)) { entry in
-            MetricsWidgetView(entry: entry).toolboxWidgetBackground(entry)
+            MetricsWidgetView(entry: entry)
+                .toolboxWidgetBackground(entry)
+                .widgetURL(toolboxURL("show"))
         }
         .configurationDisplayName("内存与占用")
         .description("内存 + CPU + 温度 + 功耗")
@@ -578,7 +586,9 @@ struct ThermalWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "cn.wangchuanhe.toolbox.widget.thermal",
                             provider: PresetProvider(preset: .thermal)) { entry in
-            MetricsWidgetView(entry: entry).toolboxWidgetBackground(entry)
+            MetricsWidgetView(entry: entry)
+                .toolboxWidgetBackground(entry)
+                .widgetURL(toolboxURL("show"))
         }
         .configurationDisplayName("温度与功耗")
         .description("温度、功耗、风扇、电池")
