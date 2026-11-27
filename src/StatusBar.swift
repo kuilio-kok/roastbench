@@ -9,6 +9,7 @@ final class StatusBarController: NSObject {
     private var timer: Timer?
     private var widget: StatusWidgetView?
     private var noSleepItem: NSMenuItem?
+    private var hudItem: NSMenuItem?
 
     /// 可选指标：id 与设置里的白名单、小组件里的参数一一对应
     struct Metric {
@@ -89,6 +90,12 @@ final class StatusBarController: NSObject {
         noSleepItem = noSleep
         menu.addItem(noSleep)
 
+        let hud = NSMenuItem(title: "常驻悬浮窗", action: #selector(onToggleHUD), keyEquivalent: "")
+        hud.target = self
+        hud.state = Settings.shared.hud ? .on : .off
+        hudItem = hud
+        menu.addItem(hud)
+
         let cc = NSMenuItem(title: "添加到控制中心…", action: #selector(onOpenControlCenter), keyEquivalent: "")
         cc.target = self
         menu.addItem(cc)
@@ -118,6 +125,7 @@ final class StatusBarController: NSObject {
     private func refresh() {
         widget?.setMetrics(Settings.shared.menuRows.components(separatedBy: ","))
         noSleepItem?.state = NoSleep.shared.isEnabled() ? .on : .off
+        hudItem?.state = Settings.shared.hud ? .on : .off
 
         guard let s = Metrics.shared.latest else {
             item?.button?.title = " —"
@@ -156,6 +164,7 @@ final class StatusBarController: NSObject {
         item = nil
         widget = nil
         noSleepItem = nil
+        hudItem = nil
     }
 
     @objc private func onStart() {
@@ -184,6 +193,10 @@ final class StatusBarController: NSObject {
 
     @objc private func onScreenClean() {
         Toolbox.run(.screenClean)
+    }
+
+    @objc private func onToggleHUD() {
+        Settings.shared.set("hud", !Settings.shared.hud)
     }
 
     @objc private func onOpenControlCenter() {

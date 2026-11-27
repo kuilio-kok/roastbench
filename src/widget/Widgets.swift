@@ -3,59 +3,6 @@ import SwiftUI
 import AppIntents
 import AppKit
 
-// 三个控制项和小组件按钮共用的跳转逻辑：统一走 mactoolbox:// URL scheme，
-// 由主 App 接管执行（清洁模式、pmset 提权这些都得在主进程里做）。
-enum ToolboxLink {
-    static func open(_ action: String) {
-        if let u = URL(string: "mactoolbox://\(action)") {
-            NSWorkspace.shared.open(u)
-        }
-    }
-}
-
-struct ScreenCleanIntent: AppIntent {
-    static var title: LocalizedStringResource = "屏幕清洁"
-    static var description = IntentDescription("深色全屏铺满屏幕，看清灰尘再擦")
-    static var openAppWhenRun = false
-    static var isDiscoverable = false
-    func perform() async throws -> some IntentResult {
-        ToolboxLink.open("screen")
-        return .result()
-    }
-}
-
-struct KeyboardCleanIntent: AppIntent {
-    static var title: LocalizedStringResource = "键盘清洁"
-    static var description = IntentDescription("锁住键盘，放心擦键帽与缝隙")
-    static var openAppWhenRun = false
-    static var isDiscoverable = false
-    func perform() async throws -> some IntentResult {
-        ToolboxLink.open("keyboard")
-        return .result()
-    }
-}
-
-struct NoSleepIntent: AppIntent {
-    static var title: LocalizedStringResource = "合盖不休眠"
-    static var description = IntentDescription("打开开关页，输入管理员密码后生效")
-    static var openAppWhenRun = false
-    static var isDiscoverable = false
-    func perform() async throws -> some IntentResult {
-        ToolboxLink.open("nosleep")
-        return .result()
-    }
-}
-
-struct DashboardIntent: AppIntent {
-    static var title: LocalizedStringResource = "打开 Mac 工具箱"
-    static var openAppWhenRun = false
-    static var isDiscoverable = false
-    func perform() async throws -> some IntentResult {
-        ToolboxLink.open("show")
-        return .result()
-    }
-}
-
 // MARK: - 控制中心控制项
 
 struct ScreenCleanControl: ControlWidget {

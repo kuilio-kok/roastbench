@@ -2809,9 +2809,16 @@ function renderMenuChips(s) {
 
   const sw = $("setMenuBar");
   if (sw) sw.checked = s.menuBar !== false;
+  const hs = $("setHUD");
+  if (hs) hs.checked = s.hud !== false;
 }
 
 function menuMetricsBind() {
+  const hs = $("setHUD");
+  if (hs) {
+    hs.onchange = (e) => call("set", { key: "hud", value: e.target.checked })
+      .then((r) => r && r.settings && applySettings(r.settings));
+  }
   const sw = $("setMenuBar");
   if (sw) {
     sw.onchange = (e) => call("set", { key: "menuBar", value: e.target.checked })

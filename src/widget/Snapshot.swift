@@ -23,6 +23,41 @@ enum Snapshot {
         NSHomeDirectory() + "/Library/Containers/" + widgetBundleID
     }
 
+    // MARK: - 待执行动作（控制中心点按钮 → App 来取）
+    // 扩展拉不动 App，就留张字条；App 启动或激活时读走并删掉，然后照做。
+    enum Pending {
+        static let name = "pending-action"
+        /// 扩展侧：写进自己的容器
+        static var sandboxPath: String {
+            NSHomeDirectory() + "/Library/Application Support/" + name
+        }
+        /// 宿主侧：去扩展容器里取
+        static var hostPath: String {
+            Snapshot.containerRoot + "/Data/Library/Application Support/" + name
+        }
+
+        static func write(_ action: String) {
+            try? action.write(toFile: sandboxPath, atomically: true, encoding: .utf8)
+        }
+
+        /// 只认 20 秒内写的，避免上次点完 App 没起来、下次启动突然动作
+        static func consume() -> String? {
+            let fm = FileManager.default
+            guard fm.fileExists(atPath: hostPath),
+                  let attrs = try? fm.attributesOfItem(atPath: hostPath),
+                  let mtime = attrs[.modificationDate] as? Date,
+                  Date().timeIntervalSince(mtime) < 20,
+                  let raw = try? String(contentsOfFile: hostPath, encoding: .utf8)
+            else {
+                try? fm.removeItem(atPath: hostPath)
+                return nil
+            }
+            try? fm.removeItem(atPath: hostPath)
+            let action = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            return action.isEmpty ? nil : action
+        }
+    }
+
     struct Snap {
         var ts: Double = 0
         var cpuTemp: Double = 0

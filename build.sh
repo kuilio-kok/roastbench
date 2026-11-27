@@ -11,22 +11,22 @@ APP_ID="cn.wangchuanhe.roastbench"
 WIDGET_ID="$APP_ID.widget"
 WIDGET_NAME="ToolboxWidget"
 APPEX="$BUNDLE/Contents/PlugIns/$WIDGET_NAME.appex"
-VERSION="3.3"
-BUILD_NO="33"
+VERSION="3.4"
+BUILD_NO="34"
 
 rm -rf "$BUNDLE" build
 mkdir -p build "$BUNDLE/Contents/MacOS" "$BUNDLE/Contents/Resources/ui" "$BUNDLE/Contents/PlugIns"
 mkdir -p "$APPEX/Contents/MacOS"
 
-APP_SRC=(src/main.swift src/Icon.swift src/StatusBar.swift src/Inspect.swift src/Cleaners.swift src/Maintenance.swift src/widget/Snapshot.swift)
+APP_SRC=(src/main.swift src/Icon.swift src/StatusBar.swift src/HUD.swift src/ToolboxIntents.swift src/Inspect.swift src/Cleaners.swift src/Maintenance.swift src/widget/Snapshot.swift)
 # 扩展和主 App 共用 Snapshot.swift：宿主按同一份路径规则写快照，扩展读自己容器
-WIDGET_SRC=(src/widget/MemProbe.swift src/widget/Snapshot.swift src/widget/Widgets.swift)
+WIDGET_SRC=(src/widget/MemProbe.swift src/widget/Snapshot.swift src/ToolboxIntents.swift src/widget/Widgets.swift)
 
 echo "▶ 编译主程序 arm64"
-swiftc -O -target arm64-apple-macos14.0 -o build/app_arm64 $APP_SRC
+swiftc -O -target arm64-apple-macos14.0 -framework AppIntents -o build/app_arm64 $APP_SRC
 
 echo "▶ 编译主程序 x86_64"
-swiftc -O -target x86_64-apple-macos14.0 -o build/app_x86_64 $APP_SRC
+swiftc -O -target x86_64-apple-macos14.0 -framework AppIntents -o build/app_x86_64 $APP_SRC
 
 echo "▶ 合并通用二进制"
 lipo -create -output "$BUNDLE/Contents/MacOS/$EXEC" build/app_arm64 build/app_x86_64
@@ -35,7 +35,7 @@ chmod +x "$BUNDLE/Contents/MacOS/$EXEC"
 echo "▶ 编译小组件扩展（ControlWidget 需要 macOS 26+）"
 for ARCH in arm64 x86_64; do
   swiftc -O -parse-as-library -target $ARCH-apple-macos26.0 \
-    -framework WidgetKit -framework SwiftUI -framework AppIntents -framework AppKit \
+    -DWIDGET_EXT -framework WidgetKit -framework SwiftUI -framework AppIntents -framework AppKit \
     -Xlinker -e -Xlinker _NSExtensionMain \
     -o build/widget_$ARCH $WIDGET_SRC
 done

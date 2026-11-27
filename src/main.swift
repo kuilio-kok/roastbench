@@ -284,6 +284,7 @@ final class Settings {
         static let menuTitle = "menuTitle"
         static let menuRows = "menuRows"
         static let menuBar = "menuBar"
+        static let hud = "hud"
     }
 
     /// 菜单栏标题与面板行可选的全部指标（顺序即展示顺序）
@@ -319,6 +320,8 @@ final class Settings {
     }
     // 是否常驻菜单栏图标
     var menuBar: Bool { ud.object(forKey: K.menuBar) == nil ? true : ud.bool(forKey: K.menuBar) }
+    // 常驻悬浮窗：默认开着，不看就关
+    var hud: Bool { ud.object(forKey: K.hud) == nil ? true : ud.bool(forKey: K.hud) }
 
     /// 只保留白名单内的指标、去重、限长；全空时回落到默认组合
     private func normalizeMetrics(_ raw: String, max limit: Int, fallback: String) -> String {
@@ -370,6 +373,7 @@ final class Settings {
             "lang": K.lang, "fontSize": K.fontSize,
             "fontWeight": K.fontWeight, "wallColor": K.wallColor,
             "menuTitle": K.menuTitle, "menuRows": K.menuRows, "menuBar": K.menuBar,
+            "hud": K.hud,
         ]
         // 菜单栏指标组合：白名单校验后再落盘，顺序与去重由 normalizeMetrics 保证
         if key == "menuTitle" || key == "menuRows" {
@@ -379,6 +383,13 @@ final class Settings {
                                          fallback: isTitle ? "temp,mem" : "mem,cpu,gpu")
             ud.set(clean, forKey: isTitle ? K.menuTitle : K.menuRows)
             StatusBarController.shared.reload()
+            if !isTitle { HUDController.shared.reload() }
+            return
+        }
+        if key == "hud" {
+            let on = (value as? Bool) ?? (String(describing: value) == "true" || String(describing: value) == "1")
+            ud.set(on, forKey: K.hud)
+            HUDController.shared.start()
             return
         }
         if key == "menuBar" {
@@ -435,7 +446,7 @@ final class Settings {
         "density":"\(density)","sideWidth":\(sideWidth),"radius":\(radius),\
         "chartFill":\(chartFill),"chartLine":\(chartLine),"lang":"\(lang)","fontSize":\(fontSize),\
         "fontWeight":\(fontWeight),"wallColor":"\(wallColor)",\
-        "menuTitle":"\(menuTitle)","menuRows":"\(menuRows)","menuBar":\(menuBar),\
+        "menuTitle":"\(menuTitle)","menuRows":"\(menuRows)","menuBar":\(menuBar),"hud":\(hud),\
         "dashboard":"\(jsonEscape(dashboard))","dark":\(isDark())}
         """
     }
@@ -1360,6 +1371,7 @@ final class MainController: NSViewController, WKScriptMessageHandler {
             Settings.shared.set("menuTitle", "temp,mem")
             Settings.shared.set("menuRows", "mem,cpu,gpu")
             Settings.shared.set("menuBar", true)
+            Settings.shared.set("hud", true)
             Metrics.shared.restart()
             notice(id, "{\"ok\":true,\"settings\":\(Settings.shared.json)}")
 
@@ -1708,6 +1720,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// 启动过程中收到的外部动作，等窗口就绪再执行
     static var pendingAction: ToolboxAction?
     private var launched = false
+    private var pendingTimer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
@@ -1738,6 +1751,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 冷启动时由控制中心 / URL scheme 带进来的动作，等页面就绪后再执行
         launched = true
+        HUDController.shared.start()
+        startPendingWatch()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in self?.consumePending() }
         if let pending = AppDelegate.pendingAction {
             AppDelegate.pendingAction = nil
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { Toolbox.run(pending) }
@@ -1762,6 +1778,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Metrics.shared.stop()
         mainWindow = nil
         StatusBarController.shared.uninstall()
+        HUDController.shared.hide()
+        pendingTimer?.invalidate()
+        pendingTimer = nil
+        pendingTimer?.invalidate()
+        pendingTimer = nil
+    }
+
+    /// 控制中心点了按钮、App 又被唤起时：读走那张"字条"并照做
+    private func consumePending() {
+        guard let action = Snapshot.Pending.consume(),
+              let a = ToolboxAction(rawValue: action) else { return }
+        Toolbox.run(a)
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        consumePending()
+    }
+
+    /// App 已经在前台时，控制中心点按钮不会触发 didBecomeActive，
+    /// 所以再挂一个轻量轮询兜着（只 stat 一个文件，开销可忽略）
+    private func startPendingWatch() {
+        pendingTimer?.invalidate()
+        let t = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in self?.consumePending() }
+        RunLoop.main.add(t, forMode: .common)
+        pendingTimer = t
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
