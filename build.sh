@@ -11,8 +11,8 @@ APP_ID="cn.wangchuanhe.roastbench"
 WIDGET_ID="$APP_ID.widget"
 WIDGET_NAME="ToolboxWidget"
 APPEX="$BUNDLE/Contents/PlugIns/$WIDGET_NAME.appex"
-VERSION="3.8"
-BUILD_NO="38"
+VERSION="3.9"
+BUILD_NO="39"
 
 rm -rf "$BUNDLE" build
 mkdir -p build "$BUNDLE/Contents/MacOS" "$BUNDLE/Contents/Resources/ui" "$BUNDLE/Contents/PlugIns"
@@ -133,11 +133,17 @@ codesign --verify --deep --strict "$BUNDLE" && echo "   签名校验通过"
 
 xattr -dr com.apple.quarantine "$BUNDLE" 2>/dev/null || true
 
-echo "▶ 注册到 LaunchServices / 插件库"
+echo "▶ 安装到 /Applications（控制中心/小组件只认这里的一份）"
+INSTALLED="/Applications/Mac 工具箱.app"
 LSREG=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
-"$LSREG" -f "$BUNDLE" 2>/dev/null || true
-pluginkit -a "$APPEX" 2>/dev/null || true
+# 同一个 bundle id + URL scheme 只能有一个claimant，工作区那份先取消注册
+"$LSREG" -u "$BUNDLE" 2>/dev/null || true
+rm -rf "$INSTALLED"
+ditto "$BUNDLE" "$INSTALLED"
+xattr -dr com.apple.quarantine "$INSTALLED" 2>/dev/null || true
+"$LSREG" -f "$INSTALLED" 2>/dev/null || true
+pluginkit -a "$INSTALLED/Contents/PlugIns/ToolboxWidget.appex" 2>/dev/null || true
 
-echo "✅ 完成：$BUNDLE"
+echo "✅ 完成：$INSTALLED（构建产物在 $BUNDLE）"
 echo "   控制中心控制项需要 macOS 26+，第一次加完如果没出现，执行：killall chronod NotificationCenter"
 du -sh "$BUNDLE"

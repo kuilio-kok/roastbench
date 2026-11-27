@@ -84,6 +84,7 @@ final class HUDController: NSObject {
                         styleMask: [.borderless, .nonactivatingPanel],
                         backing: .buffered, defer: false)
         p.isOpaque = false
+        p.isReleasedWhenClosed = false
         p.backgroundColor = .clear
         p.hasShadow = true
         p.level = .floating

@@ -138,7 +138,15 @@ final class CleanMode {
                     isKeyboard: false)
     }
 
+    /// 退出清洁模式。**必须延后一拍**再拆窗口：
+    /// 遮罩的 mouseDown / 按键监视器里直接 close()，窗口和它的 contentView 会在
+    /// 事件还没返回时就被释放，回来再碰 self 就是野指针 —— 表现出来就是退出瞬间卡死/崩溃。
     func stop() {
+        DispatchQueue.main.async { [weak self] in self?.teardown() }
+    }
+
+    private func teardown() {
+        guard window != nil else { return }   // 防重入：可能被多次触发
         if let t = tap { CGEvent.tapEnable(tap: t, enable: false) }
         if let s = source { CFRunLoopRemoveSource(CFRunLoopGetMain(), s, .commonModes) }
         tap = nil
@@ -146,7 +154,10 @@ final class CleanMode {
         if let m = localMonitor { NSEvent.removeMonitor(m); localMonitor = nil }
         guardTimer?.invalidate()
         guardTimer = nil
+        // 先撤 key 状态再关，避免关窗时 AppKit 还去激活/重算 key window
+        window?.resignKey()
         window?.orderOut(nil)
+        window?.contentView = nil
         window?.close()
         window = nil
     }
@@ -157,6 +168,8 @@ final class CleanMode {
         for s in NSScreen.screens { rect = rect.union(s.frame) }
 
         let w = CleanWindow(contentRect: rect, styleMask: .borderless, backing: .buffered, defer: false)
+        // 关键：不让 AppKit 在 close() 时自己 release，否则和我们的强引用互相踩
+        w.isReleasedWhenClosed = false
         w.level = .screenSaver
         w.backgroundColor = NSColor(calibratedRed: 0.035, green: 0.035, blue: 0.045, alpha: 1)
         w.isOpaque = true
@@ -176,6 +189,11 @@ final class CleanMode {
         NSApp.activate(ignoringOtherApps: true)
         w.makeKeyAndOrderFront(nil)
         w.makeMain()
+
+        // 调试钩子：CLEAN_AUTO_EXIT=秒数，用于无人值守验证退出路径不卡死
+        if let raw = ProcessInfo.processInfo.environment["CLEAN_AUTO_EXIT"], let d = Double(raw) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + d) { [weak self] in self?.stop() }
+        }
 
         installLocalMonitor(isKeyboard: isKeyboard)
         // 顺手把 CGEventTap 装上（已授权时连系统级快捷键一起吞，没授权也不影响使用）
@@ -264,6 +282,7 @@ final class CleanOverlayView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
-        onExit?()
+        // 让事件先走完，再拆遮罩（否则视图在 mouseDown 里被释放）
+        DispatchQueue.main.async { [weak self] in self?.onExit?() }
     }
 }
